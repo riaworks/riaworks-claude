@@ -2,21 +2,27 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
 // ===========================================================================
 // watch-context.js — Monitor de contexto injetado pelo Claude Code
 //
-// Faz tail-follow no JSONL da sessao ativa e filtra apenas o conteudo
-// injetado no contexto: system-reminders, synapse-rules, hook outputs,
-// CLAUDE.md, rules, etc.
+// Faz tail-follow nos logs de hook do AIOS/AIOX para mostrar em tempo real
+// o que esta sendo injetado no contexto da sessao Claude.
+//
+// O JSONL do Claude NAO armazena as injecoes (sao efemeras na API).
+// A unica forma de capturar e via logs de hook:
+//   .logs/rw-context-log-full.log  — output completo do hook
+//   .logs/rw-synapse-trace.log     — synapse-rules XML
+//   .logs/rw-hooks-log.log         — metricas resumidas
 //
 // Uso:
-//   node watch-context.js                # Monitora sessao ativa do projeto (cwd)
-//   node watch-context.js --cwd /path    # Monitora outro projeto
-//   node watch-context.js --all          # Mostra TUDO (nao filtra)
-//   node watch-context.js --raw          # Mostra JSON cru dos blocos injetados
-//   node watch-context.js --no-color     # Sem cores ANSI
+//   node watch-context.js                 # Monitora todos os logs
+//   node watch-context.js --log full      # Apenas context-log-full
+//   node watch-context.js --log synapse   # Apenas synapse-trace
+//   node watch-context.js --log hooks     # Apenas hooks-log (metricas)
+//   node watch-context.js --cwd /path     # Outro projeto
+//   node watch-context.js --no-color      # Sem cores ANSI
+//   node watch-context.js --since 5m      # Apenas ultimos 5 minutos
 //
 // By RIAWORKS
 // ===========================================================================
@@ -36,66 +42,7 @@ const C = {
   red: () => useColor ? '\x1b[31m' : '',
   blue: () => useColor ? '\x1b[34m' : '',
   white: () => useColor ? '\x1b[37m' : '',
-  bgBlue: () => useColor ? '\x1b[44m' : '',
-  bgMagenta: () => useColor ? '\x1b[45m' : '',
 };
-
-// ── Cross-platform path resolution (shared with read-transcript) ────────────
-
-function resolveClaudeProjectsDir() {
-  const candidates = [];
-
-  if (process.env.CLAUDE_PROJECTS_DIR) {
-    candidates.push({ dir: process.env.CLAUDE_PROJECTS_DIR, source: 'env' });
-  }
-
-  candidates.push({
-    dir: path.join(os.homedir(), '.claude', 'projects'),
-    source: 'homedir',
-  });
-
-  if (process.env.APPDATA) {
-    candidates.push({
-      dir: path.join(process.env.APPDATA, '.claude', 'projects'),
-      source: 'APPDATA',
-    });
-  }
-
-  if (process.env.LOCALAPPDATA) {
-    candidates.push({
-      dir: path.join(process.env.LOCALAPPDATA, '.claude', 'projects'),
-      source: 'LOCALAPPDATA',
-    });
-  }
-
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate.dir) && fs.statSync(candidate.dir).isDirectory()) {
-        return candidate;
-      }
-    } catch { /* skip */ }
-  }
-
-  return null;
-}
-
-function cwdToProjectHash(dir) {
-  return path.resolve(dir).replace(/[^a-zA-Z0-9]/g, '-');
-}
-
-function resolveProjectDir(claudeProjectsDir, projectHash) {
-  const exact = path.join(claudeProjectsDir, projectHash);
-  if (fs.existsSync(exact)) return exact;
-
-  try {
-    const dirs = fs.readdirSync(claudeProjectsDir);
-    const match = dirs.find((d) => d === projectHash)
-      || dirs.find((d) => d.startsWith(projectHash));
-    if (match) return path.join(claudeProjectsDir, match);
-  } catch { /* skip */ }
-
-  return null;
-}
 
 // ── Time helpers ────────────────────────────────────────────────────────────
 
@@ -115,195 +62,83 @@ function getGMTLabel() {
   return m > 0 ? `GMT${sign}${h}:${String(m).padStart(2, '0')}` : `GMT${sign}${h}`;
 }
 
-// ── Context extraction ──────────────────────────────────────────────────────
-
 /**
- * Extrai blocos de contexto injetado de uma linha JSONL.
- * Retorna array de objetos { type, source, content }.
+ * Parse duration string like "5m", "1h", "30s" to milliseconds.
  */
-function extractInjectedContext(jsonLine) {
-  let d;
-  try {
-    d = JSON.parse(jsonLine);
-  } catch {
-    return [];
-  }
-
-  const results = [];
-  const ts = d.timestamp ? toLocalTime(new Date(d.timestamp)) : '';
-
-  // Skip non-relevant types
-  if (d.type === 'file-history-snapshot') return [];
-
-  const contentItems = getContentItems(d);
-
-  for (const item of contentItems) {
-    const text = item.text || item.content || '';
-    if (typeof text !== 'string') continue;
-
-    // ── system-reminder blocks ──
-    const sysReminderRegex = /<system-reminder>([\s\S]*?)<\/system-reminder>/g;
-    let match;
-    while ((match = sysReminderRegex.exec(text)) !== null) {
-      const body = match[1].trim();
-      const source = classifySystemReminder(body);
-      results.push({ type: 'system-reminder', source, content: body, ts });
-    }
-
-    // ── synapse-rules blocks ──
-    const synapseRegex = /<synapse-rules>([\s\S]*?)<\/synapse-rules>/g;
-    while ((match = synapseRegex.exec(text)) !== null) {
-      results.push({ type: 'synapse-rules', source: 'synapse-engine', content: match[1].trim(), ts });
-    }
-
-    // ── claudeMd / CLAUDE.md injection ──
-    if (text.includes('Contents of') && text.includes('CLAUDE.md')) {
-      const claudeMdMatch = text.match(/Contents of ([^\n]+CLAUDE\.md)[^\n]*:\n([\s\S]*?)(?=\nContents of |\n# |\Z)/);
-      if (claudeMdMatch) {
-        results.push({ type: 'claude-md', source: claudeMdMatch[1], content: claudeMdMatch[2].slice(0, 500) + '...', ts });
-      }
-    }
-
-    // ── Rules files injection ──
-    if (text.includes('Contents of') && text.includes('.claude/rules/')) {
-      const rulesRegex = /Contents of ([^\n]+\.claude\/rules\/[^\n]+):\n([\s\S]*?)(?=\nContents of |\n#|\Z)/g;
-      while ((match = rulesRegex.exec(text)) !== null) {
-        results.push({ type: 'rule-file', source: match[1], content: match[2].slice(0, 300) + '...', ts });
-      }
-    }
-
-    // ── Hook output (UserPromptSubmit) ──
-    if (text.includes('UserPromptSubmit hook')) {
-      const hookMatch = text.match(/UserPromptSubmit hook (success|error|additional context):\s*([\s\S]*?)(?=<|$)/);
-      if (hookMatch) {
-        results.push({ type: 'hook-output', source: `UserPromptSubmit:${hookMatch[1]}`, content: hookMatch[2].trim().slice(0, 200), ts });
-      }
-    }
-
-    // ── PreCompact hook ──
-    if (text.includes('PreCompact')) {
-      results.push({ type: 'hook-output', source: 'PreCompact', content: text.slice(0, 200), ts });
-    }
-  }
-
-  return results;
+function parseDuration(str) {
+  const match = str.match(/^(\d+)(s|m|h)$/);
+  if (!match) return 0;
+  const val = parseInt(match[1], 10);
+  const unit = match[2];
+  if (unit === 's') return val * 1000;
+  if (unit === 'm') return val * 60 * 1000;
+  if (unit === 'h') return val * 60 * 60 * 1000;
+  return 0;
 }
 
-/**
- * Extrai items de conteudo de uma entrada JSONL.
- */
-function getContentItems(d) {
-  if (!d.message) return [];
-  const content = d.message.content;
-  if (typeof content === 'string') return [{ text: content }];
-  if (Array.isArray(content)) return content;
-  return [];
-}
+// ── Log file definitions ────────────────────────────────────────────────────
 
-/**
- * Classifica o tipo de system-reminder pelo conteudo.
- */
-function classifySystemReminder(body) {
-  if (body.includes('synapse-rules')) return 'synapse-engine';
-  if (body.includes('UserPromptSubmit hook')) return 'hook:UserPromptSubmit';
-  if (body.includes('PreCompact')) return 'hook:PreCompact';
-  if (body.includes('CLAUDE.md')) return 'claude-md';
-  if (body.includes('.claude/rules/')) return 'rules-file';
-  if (body.includes('task tools')) return 'task-reminder';
-  if (body.includes('skill')) return 'skills-list';
-  if (body.includes('Available skills')) return 'skills-list';
-  if (body.includes('currentDate')) return 'system-info';
-  if (body.includes('gitStatus')) return 'git-status';
-  return 'unknown';
-}
-
-// ── Display ─────────────────────────────────────────────────────────────────
-
-const TYPE_COLORS = {
-  'system-reminder': C.yellow,
-  'synapse-rules': C.cyan,
-  'claude-md': C.green,
-  'rule-file': C.blue,
-  'hook-output': C.magenta,
+const LOG_FILES = {
+  full: {
+    filename: 'rw-context-log-full.log',
+    label: 'CONTEXT',
+    color: C.cyan,
+    description: 'Output completo do hook (synapse-rules + static context)',
+  },
+  synapse: {
+    filename: 'rw-synapse-trace.log',
+    label: 'SYNAPSE',
+    color: C.magenta,
+    description: 'Synapse-rules XML (constitution, bracket, rules)',
+  },
+  hooks: {
+    filename: 'rw-hooks-log.log',
+    label: 'HOOKS',
+    color: C.yellow,
+    description: 'Metricas resumidas (session, rules count, bytes)',
+  },
 };
 
-const TYPE_ICONS = {
-  'system-reminder': 'SYS',
-  'synapse-rules': 'SYN',
-  'claude-md': 'CMD',
-  'rule-file': 'RUL',
-  'hook-output': 'HOK',
-};
-
-function printContextBlock(block, rawMode) {
-  const color = (TYPE_COLORS[block.type] || C.white)();
-  const icon = TYPE_ICONS[block.type] || '???';
-  const reset = C.reset();
-  const dim = C.dim();
-  const bold = C.bold();
-
-  if (rawMode) {
-    console.log(JSON.stringify(block, null, 2));
-    return;
-  }
-
-  const header = `${dim}${block.ts}${reset} ${color}${bold}[${icon}]${reset} ${color}${block.source}${reset}`;
-  console.log(header);
-
-  // Format content with indentation
-  const lines = block.content.split('\n');
-  const maxLines = 30;
-  const preview = lines.slice(0, maxLines);
-
-  for (const line of preview) {
-    console.log(`${dim}  │${reset} ${line}`);
-  }
-
-  if (lines.length > maxLines) {
-    console.log(`${dim}  │ ... (+${lines.length - maxLines} linhas)${reset}`);
-  }
-
-  console.log('');
-}
-
-function printSeparator() {
-  const dim = C.dim();
-  const reset = C.reset();
-  console.log(`${dim}${'─'.repeat(70)}${reset}`);
-}
-
-// ── File watcher (tail -f) ──────────────────────────────────────────────────
+// ── Tail-follow engine ──────────────────────────────────────────────────────
 
 /**
- * Faz tail-follow num arquivo JSONL.
- * Usa fs.watchFile (polling) por compatibilidade cross-platform.
+ * Monitora um arquivo de log, mostrando novas linhas em tempo real.
  *
  * @param {string} filePath
- * @param {object} opts
- * @param {boolean} opts.showAll
- * @param {boolean} opts.rawMode
+ * @param {string} label
+ * @param {Function} colorFn
+ * @param {number} sinceMs - Mostrar apenas linhas dos ultimos N ms (0 = tudo novo)
+ * @returns {{ stop: Function }}
  */
-function tailFollow(filePath, opts) {
-  const { showAll, rawMode } = opts;
-
+function tailFile(filePath, label, colorFn, sinceMs) {
   let fileSize = 0;
-  try {
-    fileSize = fs.statSync(filePath).size;
-  } catch { /* file may not exist yet */ }
-
   let lineBuffer = '';
+  let initialDump = true;
+
+  try {
+    const stat = fs.statSync(filePath);
+    if (sinceMs > 0) {
+      // Read existing content and show recent lines
+      fileSize = 0; // Read from beginning to filter by time
+    } else {
+      // Start from end of file (only show new content)
+      fileSize = stat.size;
+    }
+  } catch {
+    // File doesn't exist yet — will watch for creation
+  }
 
   function processNewData() {
     let currentSize;
     try {
       currentSize = fs.statSync(filePath).size;
     } catch {
-      return;
+      return; // File doesn't exist yet
     }
 
-    if (currentSize <= fileSize) return;
+    if (currentSize <= fileSize && !initialDump) return;
+    if (currentSize === fileSize) { initialDump = false; return; }
 
-    // Read only the new bytes
     const fd = fs.openSync(filePath, 'r');
     const bytesToRead = currentSize - fileSize;
     const buf = Buffer.alloc(bytesToRead);
@@ -311,88 +146,74 @@ function tailFollow(filePath, opts) {
     fs.closeSync(fd);
 
     fileSize = currentSize;
+    initialDump = false;
 
-    // Process line by line
     const chunk = lineBuffer + buf.toString('utf8');
     const lines = chunk.split('\n');
-
-    // Last element might be incomplete — save for next read
     lineBuffer = lines.pop() || '';
+
+    const now = Date.now();
+    const color = colorFn();
+    const dim = C.dim();
+    const reset = C.reset();
+    const bold = C.bold();
 
     for (const line of lines) {
       if (!line.trim()) continue;
 
-      if (showAll) {
-        // Show everything parsed
-        let d;
-        try {
-          d = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (d.type === 'file-history-snapshot') continue;
-
-        const ts = d.timestamp ? toLocalTime(new Date(d.timestamp)) : '';
-        const role = d.type || '?';
-        const dim = C.dim();
-        const reset = C.reset();
-        const bold = C.bold();
-
-        if (role === 'user') {
-          console.log(`${dim}${ts}${reset} ${C.green()}${bold}[USER]${reset}`);
-        } else if (role === 'assistant') {
-          console.log(`${dim}${ts}${reset} ${C.cyan()}${bold}[ASSISTANT]${reset}`);
+      // If --since is set, filter by timestamp in the line
+      if (sinceMs > 0) {
+        const tsMatch = line.match(/^\[(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)\]/);
+        if (tsMatch) {
+          const lineTime = new Date(tsMatch[1]).getTime();
+          if (now - lineTime > sinceMs) continue;
         }
       }
 
-      const blocks = extractInjectedContext(line);
-      if (blocks.length > 0) {
-        printSeparator();
-        for (const block of blocks) {
-          printContextBlock(block, rawMode);
-        }
+      // Format the line
+      const isSection = line.startsWith('[') && line.includes(']');
+      const isXmlTag = line.trim().startsWith('<') || line.trim().startsWith('</');
+      const isRule = line.trim().match(/^\d+\.\s/) || line.includes('MUST:') || line.includes('SHOULD:');
+      const isBracket = line.includes('CONTEXT BRACKET') || line.includes('[FRESH]') || line.includes('[WARM]') || line.includes('[HOT]');
+      const isConstitution = line.includes('[CONSTITUTION]') || line.includes('NON-NEGOTIABLE');
+      const isStatic = line.includes('[STATIC CONTEXT]');
+      const isMetric = line.includes('Hook output:') || line.includes('Runtime resolved');
+
+      let prefix = `${dim}${color}[${label}]${reset} `;
+
+      if (isConstitution) {
+        console.log(`${prefix}${C.red()}${bold}${line}${reset}`);
+      } else if (isBracket) {
+        console.log(`${prefix}${C.green()}${bold}${line}${reset}`);
+      } else if (isStatic) {
+        console.log(`${prefix}${C.blue()}${bold}${line}${reset}`);
+      } else if (isMetric) {
+        // Extract and colorize metrics
+        const localTs = line.match(/^\[(.+?)\]/)
+          ? toLocalTime(new Date(line.match(/^\[(.+?)\]/)[1]))
+          : '';
+        const rest = line.replace(/^\[.+?\]\s*\[.+?\]\s*/, '');
+        console.log(`${prefix}${dim}${localTs}${reset} ${color}${rest}${reset}`);
+      } else if (isXmlTag) {
+        console.log(`${prefix}${dim}${line}${reset}`);
+      } else if (isRule) {
+        console.log(`${prefix}  ${line}`);
+      } else if (isSection) {
+        const localTs = line.match(/^\[(.+?)\]/)
+          ? toLocalTime(new Date(line.match(/^\[(.+?)\]/)[1]))
+          : '';
+        const rest = line.replace(/^\[.+?\]\s*/, '');
+        console.log(`${prefix}${dim}${localTs}${reset} ${rest}`);
+      } else {
+        console.log(`${prefix}${line}`);
       }
     }
   }
 
-  // Poll interval — 500ms is responsive without being wasteful
-  const POLL_MS = 500;
-  const watcher = setInterval(processNewData, POLL_MS);
+  const interval = setInterval(processNewData, 500);
+  processNewData(); // Initial read
 
-  // Also do initial check
-  processNewData();
-
-  return { stop: () => clearInterval(watcher) };
-}
-
-// ── Find active session ─────────────────────────────────────────────────────
-
-/**
- * Encontra o JSONL da sessao mais recente de um projeto.
- *
- * @param {string} projectDir
- * @returns {{ filePath: string, sessionId: string } | null}
- */
-function findActiveSession(projectDir) {
-  let files;
-  try {
-    files = fs.readdirSync(projectDir)
-      .filter((f) => f.endsWith('.jsonl'))
-      .map((f) => ({
-        name: f,
-        mtime: fs.statSync(path.join(projectDir, f)).mtime,
-      }))
-      .sort((a, b) => b.mtime - a.mtime);
-  } catch {
-    return null;
-  }
-
-  if (files.length === 0) return null;
-
-  return {
-    filePath: path.join(projectDir, files[0].name),
-    sessionId: files[0].name.replace('.jsonl', ''),
-  };
+  return { stop: () => clearInterval(interval) };
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -400,17 +221,19 @@ function findActiveSession(projectDir) {
 function main() {
   const args = process.argv.slice(2);
   let cwd = process.cwd();
-  let showAll = false;
-  let rawMode = false;
+  let logFilter = null; // null = all logs
+  let sinceStr = null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--cwd' && args[i + 1]) {
       cwd = args[i + 1];
       i++;
-    } else if (args[i] === '--all') {
-      showAll = true;
-    } else if (args[i] === '--raw') {
-      rawMode = true;
+    } else if (args[i] === '--log' && args[i + 1]) {
+      logFilter = args[i + 1];
+      i++;
+    } else if (args[i] === '--since' && args[i + 1]) {
+      sinceStr = args[i + 1];
+      i++;
     } else if (args[i] === '--no-color') {
       useColor = false;
     } else if (args[i] === '--help' || args[i] === '-h') {
@@ -419,35 +242,47 @@ function main() {
     }
   }
 
-  // Resolve Claude projects dir
-  const resolved = resolveClaudeProjectsDir();
-  if (!resolved) {
-    console.error('Nao foi possivel encontrar o diretorio de projetos do Claude Code.');
-    console.error(`Verificado: ${path.join(os.homedir(), '.claude', 'projects')}`);
+  const logsDir = path.join(cwd, '.logs');
+
+  if (!fs.existsSync(logsDir)) {
+    console.error(`Diretorio .logs/ nao encontrado em: ${cwd}`);
+    console.error('');
+    console.error('Este projeto precisa ter os hooks AIOS/AIOX com logging ativo.');
+    console.error('Use o hook-fix-pack para instalar os hooks com hookLog().');
     process.exit(1);
   }
 
-  // Resolve project
-  const projectHash = cwdToProjectHash(cwd);
-  const projectDir = resolveProjectDir(resolved.dir, projectHash);
+  // Check which log files exist
+  const available = {};
+  for (const [key, def] of Object.entries(LOG_FILES)) {
+    const filePath = path.join(logsDir, def.filename);
+    if (fs.existsSync(filePath)) {
+      available[key] = { ...def, filePath };
+    }
+  }
 
-  if (!projectDir) {
-    console.error(`Projeto nao encontrado para: ${cwd}`);
-    console.error(`Hash: ${projectHash}`);
+  if (Object.keys(available).length === 0) {
+    console.error('Nenhum log de hook encontrado em .logs/');
+    console.error('Esperados: rw-context-log-full.log, rw-synapse-trace.log, rw-hooks-log.log');
     process.exit(1);
   }
 
-  // Find active session
-  const session = findActiveSession(projectDir);
-  if (!session) {
-    console.error('Nenhuma sessao encontrada.');
-    process.exit(1);
+  // Filter selection
+  let targets = available;
+  if (logFilter) {
+    if (!available[logFilter]) {
+      console.error(`Log "${logFilter}" nao encontrado. Disponiveis: ${Object.keys(available).join(', ')}`);
+      process.exit(1);
+    }
+    targets = { [logFilter]: available[logFilter] };
   }
+
+  const sinceMs = sinceStr ? parseDuration(sinceStr) : 0;
 
   // Print header
-  const dim = C.dim();
   const bold = C.bold();
   const cyan = C.cyan();
+  const dim = C.dim();
   const reset = C.reset();
 
   console.log('');
@@ -456,28 +291,43 @@ function main() {
   console.log(`${cyan}${bold}  ║        by RIAWORKS                                      ║${reset}`);
   console.log(`${cyan}${bold}  ╚══════════════════════════════════════════════════════════╝${reset}`);
   console.log('');
-  console.log(`  ${dim}Sessao:${reset}    ${session.sessionId}`);
-  console.log(`  ${dim}Projeto:${reset}   ${projectHash.slice(0, 50)}`);
-  console.log(`  ${dim}Arquivo:${reset}   ${session.filePath}`);
+  console.log(`  ${dim}Projeto:${reset}   ${cwd}`);
   console.log(`  ${dim}Timezone:${reset}  ${getGMTLabel()}`);
-  console.log(`  ${dim}Modo:${reset}      ${showAll ? 'ALL (tudo)' : 'CONTEXT (apenas injecoes)'}`);
+  console.log(`  ${dim}Logs dir:${reset}  ${logsDir}`);
   console.log('');
-  console.log(`  ${dim}Monitorando... (Ctrl+C para parar)${reset}`);
-  console.log('');
-  printSeparator();
 
-  // Start tailing
-  const watcher = tailFollow(session.filePath, { showAll, rawMode });
+  console.log(`  ${dim}Monitorando:${reset}`);
+  for (const [key, def] of Object.entries(targets)) {
+    const size = (fs.statSync(def.filePath).size / 1024).toFixed(1);
+    console.log(`    ${def.color()}[${def.label}]${reset} ${def.filename} (${size} KB) — ${def.description}`);
+  }
+  console.log('');
+
+  if (sinceMs > 0) {
+    console.log(`  ${dim}Filtro:${reset}    ultimos ${sinceStr}`);
+  } else {
+    console.log(`  ${dim}Modo:${reset}      mostrando apenas novas injecoes a partir de agora`);
+  }
+
+  console.log('');
+  console.log(`  ${dim}Aguardando proximo prompt... (Ctrl+C para parar)${reset}`);
+  console.log('');
+  console.log(`${dim}${'─'.repeat(70)}${reset}`);
+
+  // Start tailing all selected logs
+  const watchers = [];
+  for (const [, def] of Object.entries(targets)) {
+    watchers.push(tailFile(def.filePath, def.label, def.color, sinceMs));
+  }
 
   // Graceful shutdown
   process.on('SIGINT', () => {
-    watcher.stop();
+    for (const w of watchers) w.stop();
     console.log('');
     console.log(`${dim}  Watcher encerrado.${reset}`);
     process.exit(0);
   });
 
-  // Keep alive
   process.stdin.resume();
 }
 
@@ -489,22 +339,30 @@ function printHelp() {
   console.log('');
   console.log(`${bold}  Claude Context Watcher${reset} — by RIAWORKS`);
   console.log('');
-  console.log('  Monitora em tempo real o que o Claude Code injeta no contexto');
-  console.log('  da sessao (system-reminders, synapse-rules, hooks, CLAUDE.md, rules).');
+  console.log('  Monitora em tempo real o que os hooks AIOS/AIOX injetam no contexto');
+  console.log('  da sessao Claude Code. Le os logs de hook em .logs/');
+  console.log('');
+  console.log(`  ${bold}IMPORTANTE:${reset} O JSONL do Claude NAO armazena as injecoes de contexto.`);
+  console.log('  Elas sao efemeras (existem apenas no request da API). A unica forma');
+  console.log('  de captura-las e via os logs de hook.');
   console.log('');
   console.log(`  ${bold}Uso:${reset}`);
-  console.log('    node watch-context.js                # Monitora sessao ativa (cwd)');
-  console.log('    node watch-context.js --cwd /path    # Monitora outro projeto');
-  console.log('    node watch-context.js --all          # Mostra tudo, nao so injecoes');
-  console.log('    node watch-context.js --raw          # JSON cru dos blocos');
-  console.log('    node watch-context.js --no-color     # Sem cores ANSI');
+  console.log('    node watch-context.js                 # Monitora todos os logs');
+  console.log('    node watch-context.js --log full      # Apenas context completo');
+  console.log('    node watch-context.js --log synapse   # Apenas synapse-rules');
+  console.log('    node watch-context.js --log hooks     # Apenas metricas resumidas');
+  console.log('    node watch-context.js --since 5m      # Ultimos 5 minutos');
+  console.log('    node watch-context.js --since 1h      # Ultima hora');
+  console.log('    node watch-context.js --cwd /path     # Outro projeto');
+  console.log('    node watch-context.js --no-color      # Sem cores ANSI');
   console.log('');
-  console.log(`  ${bold}Legenda:${reset}`);
-  console.log(`    ${C.yellow()}[SYS]${reset} system-reminder      ${C.cyan()}[SYN]${reset} synapse-rules`);
-  console.log(`    ${C.green()}[CMD]${reset} CLAUDE.md             ${C.blue()}[RUL]${reset} rules file`);
-  console.log(`    ${C.magenta()}[HOK]${reset} hook output`);
+  console.log(`  ${bold}Logs monitorados:${reset}`);
+  console.log(`    ${C.cyan()}[CONTEXT]${reset}  rw-context-log-full.log  — Output completo do hook`);
+  console.log(`    ${C.magenta()}[SYNAPSE]${reset}  rw-synapse-trace.log    — Synapse-rules XML`);
+  console.log(`    ${C.yellow()}[HOOKS]${reset}    rw-hooks-log.log        — Metricas resumidas`);
   console.log('');
-  console.log(`  ${dim}Dica: abra num terminal separado enquanto usa o Claude Code.${reset}`);
+  console.log(`  ${bold}Dica:${reset} Abra num terminal separado enquanto usa o Claude Code.`);
+  console.log(`  ${dim}Cada prompt que voce envia dispara os hooks e gera novas entradas.${reset}`);
   console.log('');
 }
 
