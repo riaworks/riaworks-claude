@@ -76,9 +76,9 @@ node read-transcript/read-transcript.js --help    # Uso
 
 ### [`aios-aiox-fixes`](aios-aiox-fixes/)
 
-Pack de correções de hooks para projetos Synkra AIOS/AIOX. Corrige 9 bugs no sistema de hooks e adiciona logging persistente.
+Pack de correções de hooks para projetos Synkra AIOS/X. Corrige 9 bugs no sistema de hooks e adiciona logging persistente.
 
-- 4 arquivos corrigidos prontos para usar em qualquer projeto AIOS
+- 4 arquivos corrigidos prontos para usar em qualquer projeto AIOX
 - Fixes: erros de hook, stdout cortado no Windows, persistencia de sessao, limpeza de orphans
 - Adiciona `hookLog()` logging fire-and-forget em `.logs/hooks.log`
 

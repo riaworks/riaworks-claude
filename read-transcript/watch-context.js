@@ -83,13 +83,19 @@ const LOG_FILES = {
     filename: 'rw-context-log-full.log',
     label: 'CONTEXT',
     color: C.cyan,
-    description: 'Output completo do hook (synapse-rules + static context)',
+    description: 'Output completo do hook (synapse-rules + static context + skills)',
   },
   synapse: {
     filename: 'rw-synapse-trace.log',
     label: 'SYNAPSE',
     color: C.magenta,
     description: 'Synapse-rules XML (constitution, bracket, rules)',
+  },
+  intel: {
+    filename: 'rw-intel-context-log.log',
+    label: 'INTEL',
+    color: C.blue,
+    description: 'Code-intel + Skill activations (agent prompts, entity refs)',
   },
   hooks: {
     filename: 'rw-hooks-log.log',
@@ -178,10 +184,14 @@ function tailFile(filePath, label, colorFn, sinceMs) {
       const isConstitution = line.includes('[CONSTITUTION]') || line.includes('NON-NEGOTIABLE');
       const isStatic = line.includes('[STATIC CONTEXT]');
       const isMetric = line.includes('Hook output:') || line.includes('Runtime resolved');
+      const isSkill = line.includes('SKILL ACTIVATION') || line.includes('[SKILL]') || line.includes('[AGENT PROMPT]');
+      const isYaml = line.trim().match(/^[a-zA-Z_-]+:/) || line.trim().startsWith('- ');
 
       let prefix = `${dim}${color}[${label}]${reset} `;
 
-      if (isConstitution) {
+      if (isSkill) {
+        console.log(`${prefix}${C.magenta()}${bold}${line}${reset}`);
+      } else if (isConstitution) {
         console.log(`${prefix}${C.red()}${bold}${line}${reset}`);
       } else if (isBracket) {
         console.log(`${prefix}${C.green()}${bold}${line}${reset}`);
@@ -216,56 +226,140 @@ function tailFile(filePath, label, colorFn, sinceMs) {
   return { stop: () => clearInterval(interval) };
 }
 
-// ── Main ────────────────────────────────────────────────────────────────────
+// ── Interactive menu ─────────────────────────────────────────────────────────
 
-function main() {
-  const args = process.argv.slice(2);
-  let cwd = process.cwd();
-  let logFilter = null; // null = all logs
-  let sinceStr = null;
+const readline = require('readline');
 
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--cwd' && args[i + 1]) {
-      cwd = args[i + 1];
-      i++;
-    } else if (args[i] === '--log' && args[i + 1]) {
-      logFilter = args[i + 1];
-      i++;
-    } else if (args[i] === '--since' && args[i + 1]) {
-      sinceStr = args[i + 1];
-      i++;
-    } else if (args[i] === '--no-color') {
-      useColor = false;
-    } else if (args[i] === '--help' || args[i] === '-h') {
-      printHelp();
-      process.exit(0);
+/**
+ * Show an interactive arrow-key menu and return the selected index.
+ * Uses readline.emitKeypressEvents for correct escape sequence parsing on Windows.
+ *
+ * @param {string} title - Menu section title
+ * @param {Array<{label: string, value: string, desc?: string}>} items
+ * @returns {Promise<number>} Selected index
+ */
+function showMenu(title, items) {
+  return new Promise((resolve) => {
+    let selected = 0;
+    const bold = C.bold();
+    const dim = C.dim();
+    const cyan = C.cyan();
+    const green = C.green();
+    const reset = C.reset();
+
+    function render() {
+      // Move cursor up to overwrite previous render (except first time)
+      if (render._rendered) {
+        process.stdout.write(`\x1b[${items.length}A`);
+      }
+      for (let i = 0; i < items.length; i++) {
+        const prefix = i === selected
+          ? `  ${green}${bold}> ${reset}${bold}`
+          : `    ${dim}`;
+        const suffix = items[i].desc ? `  ${dim}${items[i].desc}${reset}` : '';
+        const line = `${prefix}${items[i].label}${reset}${suffix}`;
+        process.stdout.write(`\x1b[2K${line}\n`);
+      }
+      render._rendered = true;
     }
-  }
 
-  const logsDir = path.join(cwd, '.logs');
+    console.log(`\n  ${cyan}${bold}${title}${reset}`);
+    console.log('');
 
-  if (!fs.existsSync(logsDir)) {
-    console.error(`Diretorio .logs/ nao encontrado em: ${cwd}`);
-    console.error('');
-    console.error('Este projeto precisa ter os hooks AIOS/AIOX com logging ativo.');
-    console.error('Use o hook-fix-pack para instalar os hooks com hookLog().');
-    process.exit(1);
-  }
+    render();
 
-  // Check which log files exist
-  const available = {};
-  for (const [key, def] of Object.entries(LOG_FILES)) {
-    const filePath = path.join(logsDir, def.filename);
-    if (fs.existsSync(filePath)) {
-      available[key] = { ...def, filePath };
+    if (!process.stdin.isTTY) {
+      resolve(0);
+      return;
     }
+
+    // Use readline keypress events — correctly parses escape sequences on Windows
+    readline.emitKeypressEvents(process.stdin);
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+
+    const onKeypress = (str, key) => {
+      if (!key) return;
+
+      if (key.name === 'up' || key.name === 'k') {
+        selected = (selected - 1 + items.length) % items.length;
+        render();
+      } else if (key.name === 'down' || key.name === 'j') {
+        selected = (selected + 1) % items.length;
+        render();
+      } else if (key.name === 'return' || key.name === 'space') {
+        process.stdin.removeListener('keypress', onKeypress);
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        resolve(selected);
+      } else if (key.name === 'q' || (key.ctrl && key.name === 'c')) {
+        process.stdin.setRawMode(false);
+        console.log('');
+        process.exit(0);
+      }
+    };
+
+    process.stdin.on('keypress', onKeypress);
+  });
+}
+
+/**
+ * Run the interactive menu flow and return chosen options.
+ * @param {Object} available - Available log files
+ * @returns {Promise<{logFilter: string|null, sinceStr: string|null}>}
+ */
+async function interactiveMenu(available) {
+  const bold = C.bold();
+  const cyan = C.cyan();
+  const dim = C.dim();
+  const reset = C.reset();
+
+  console.log('');
+  console.log(`${cyan}${bold}  ╔══════════════════════════════════════════════════════════╗${reset}`);
+  console.log(`${cyan}${bold}  ║        Claude Context Watcher                           ║${reset}`);
+  console.log(`${cyan}${bold}  ║        by RIAWORKS                                      ║${reset}`);
+  console.log(`${cyan}${bold}  ╚══════════════════════════════════════════════════════════╝${reset}`);
+  console.log('');
+  console.log(`  ${dim}Use setas ↑↓ para navegar, Enter para selecionar, q para sair${reset}`);
+
+  // ── Menu 1: Log source ──
+  const logItems = [
+    { label: 'Todos os logs', value: null, desc: '(full + synapse + hooks)' },
+  ];
+  for (const [key, def] of Object.entries(available)) {
+    const size = (fs.statSync(def.filePath).size / 1024).toFixed(1);
+    logItems.push({
+      label: `${def.color()}[${def.label}]${reset} ${def.filename}`,
+      value: key,
+      desc: `${size} KB — ${def.description}`,
+    });
   }
 
-  if (Object.keys(available).length === 0) {
-    console.error('Nenhum log de hook encontrado em .logs/');
-    console.error('Esperados: rw-context-log-full.log, rw-synapse-trace.log, rw-hooks-log.log');
-    process.exit(1);
-  }
+  const logIdx = await showMenu('Qual log monitorar?', logItems);
+  const logFilter = logItems[logIdx].value;
+
+  // ── Menu 2: Time filter ──
+  const sinceItems = [
+    { label: 'Apenas novas injecoes', value: null, desc: '(live mode — a partir de agora)' },
+    { label: 'Ultimos 5 minutos',     value: '5m' },
+    { label: 'Ultimos 15 minutos',    value: '15m' },
+    { label: 'Ultimos 30 minutos',    value: '30m' },
+    { label: 'Ultima hora',           value: '1h' },
+  ];
+
+  const sinceIdx = await showMenu('Periodo de tempo?', sinceItems);
+  const sinceStr = sinceItems[sinceIdx].value;
+
+  return { logFilter, sinceStr };
+}
+
+// ── Start watcher (shared between CLI args and menu) ─────────────────────────
+
+function startWatcher(cwd, logsDir, available, logFilter, sinceStr) {
+  const bold = C.bold();
+  const cyan = C.cyan();
+  const dim = C.dim();
+  const reset = C.reset();
 
   // Filter selection
   let targets = available;
@@ -280,11 +374,6 @@ function main() {
   const sinceMs = sinceStr ? parseDuration(sinceStr) : 0;
 
   // Print header
-  const bold = C.bold();
-  const cyan = C.cyan();
-  const dim = C.dim();
-  const reset = C.reset();
-
   console.log('');
   console.log(`${cyan}${bold}  ╔══════════════════════════════════════════════════════════╗${reset}`);
   console.log(`${cyan}${bold}  ║        Claude Context Watcher                           ║${reset}`);
@@ -297,7 +386,7 @@ function main() {
   console.log('');
 
   console.log(`  ${dim}Monitorando:${reset}`);
-  for (const [key, def] of Object.entries(targets)) {
+  for (const [, def] of Object.entries(targets)) {
     const size = (fs.statSync(def.filePath).size / 1024).toFixed(1);
     console.log(`    ${def.color()}[${def.label}]${reset} ${def.filename} (${size} KB) — ${def.description}`);
   }
@@ -331,6 +420,72 @@ function main() {
   process.stdin.resume();
 }
 
+// ── Main ────────────────────────────────────────────────────────────────────
+
+async function main() {
+  const args = process.argv.slice(2);
+  let cwd = process.cwd();
+  let logFilter = null; // null = all logs
+  let sinceStr = null;
+  let hasArgs = false;
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--cwd' && args[i + 1]) {
+      cwd = args[i + 1];
+      i++;
+      hasArgs = true;
+    } else if (args[i] === '--log' && args[i + 1]) {
+      logFilter = args[i + 1];
+      i++;
+      hasArgs = true;
+    } else if (args[i] === '--since' && args[i + 1]) {
+      sinceStr = args[i + 1];
+      i++;
+      hasArgs = true;
+    } else if (args[i] === '--no-color') {
+      useColor = false;
+      hasArgs = true;
+    } else if (args[i] === '--help' || args[i] === '-h') {
+      printHelp();
+      process.exit(0);
+    }
+  }
+
+  const logsDir = path.join(cwd, '.logs');
+
+  if (!fs.existsSync(logsDir)) {
+    console.error(`Diretorio .logs/ nao encontrado em: ${cwd}`);
+    console.error('');
+    console.error('Este projeto precisa ter os hooks AIOS/AIOX com logging ativo.');
+    console.error('Use o hook-fix-pack para instalar os hooks com hookLog().');
+    process.exit(1);
+  }
+
+  // Check which log files exist
+  const available = {};
+  for (const [key, def] of Object.entries(LOG_FILES)) {
+    const filePath = path.join(logsDir, def.filename);
+    if (fs.existsSync(filePath)) {
+      available[key] = { ...def, filePath };
+    }
+  }
+
+  if (Object.keys(available).length === 0) {
+    console.error('Nenhum log de hook encontrado em .logs/');
+    console.error('Esperados: rw-context-log-full.log, rw-synapse-trace.log, rw-hooks-log.log');
+    process.exit(1);
+  }
+
+  // If no CLI args and terminal is interactive — show menu
+  if (!hasArgs && process.stdin.isTTY) {
+    const choices = await interactiveMenu(available);
+    logFilter = choices.logFilter;
+    sinceStr = choices.sinceStr;
+  }
+
+  startWatcher(cwd, logsDir, available, logFilter, sinceStr);
+}
+
 function printHelp() {
   const bold = C.bold();
   const reset = C.reset();
@@ -347,7 +502,7 @@ function printHelp() {
   console.log('  de captura-las e via os logs de hook.');
   console.log('');
   console.log(`  ${bold}Uso:${reset}`);
-  console.log('    node watch-context.js                 # Monitora todos os logs');
+  console.log('    node watch-context.js                 # Menu interativo (setas + Enter)');
   console.log('    node watch-context.js --log full      # Apenas context completo');
   console.log('    node watch-context.js --log synapse   # Apenas synapse-rules');
   console.log('    node watch-context.js --log hooks     # Apenas metricas resumidas');
@@ -355,6 +510,11 @@ function printHelp() {
   console.log('    node watch-context.js --since 1h      # Ultima hora');
   console.log('    node watch-context.js --cwd /path     # Outro projeto');
   console.log('    node watch-context.js --no-color      # Sem cores ANSI');
+  console.log('');
+  console.log(`  ${bold}Menu interativo:${reset}`);
+  console.log('    Sem argumentos, abre um menu com setas para escolher:');
+  console.log('      1. Qual log monitorar (todos, context, synapse, hooks)');
+  console.log('      2. Periodo de tempo (live, 5m, 15m, 30m, 1h)');
   console.log('');
   console.log(`  ${bold}Logs monitorados:${reset}`);
   console.log(`    ${C.cyan()}[CONTEXT]${reset}  rw-context-log-full.log  — Output completo do hook`);
