@@ -13,7 +13,7 @@ I need you to apply the RIAWORKS logging extensions to this AIOX project. Apply 
 
 ## STEP 0 — VERIFY DOCUMENTATION
 
-Check if the folder `.riaworks-claude/claude-logs/docs/` exists at the project root (same level as `.aiox-core/`).
+Check if the folder `.riaworks-claude/claude-logs/ref/` exists at the project root (same level as `.aiox-core/`).
 
 If it does NOT exist, ask me:
 "The riaworks-claude submodule is not present. Can I clone it from
@@ -23,14 +23,14 @@ Wait for my confirmation before cloning. If it already exists, continue.
 
 ## STEP 1 — READ ALL LOG DOCUMENTATION
 
-Read these files from `.riaworks-claude/claude-logs/docs/`. They contain all logging function
+Read these files from `.riaworks-claude/claude-logs/ref/`. They contain all logging function
 definitions, code snippets, and behavior. Do NOT guess — use the exact code from these files:
 
-1. `.riaworks-claude/claude-logs/docs/rw-hooks-log.md` — rwHooksLog() function and usage
-2. `.riaworks-claude/claude-logs/docs/rw-synapse-trace.md` — rwSynapseTrace() function and usage
-3. `.riaworks-claude/claude-logs/docs/rw-intel-context-log.md` — rwIntelContextLog() function and usage
-4. `.riaworks-claude/claude-logs/docs/rw-context-log-full.md` — rwContextLogFull() unified log
-5. `.riaworks-claude/claude-logs/docs/04-fix-skill-logging.md` — Skill/agent activation logging
+1. `.riaworks-claude/claude-logs/ref/rw-hooks-log.md` — rwHooksLog() function and usage
+2. `.riaworks-claude/claude-logs/ref/rw-synapse-trace.md` — rwSynapseTrace() function and usage
+3. `.riaworks-claude/claude-logs/ref/rw-intel-context-log.md` — rwIntelContextLog() function and usage
+4. `.riaworks-claude/claude-logs/ref/rw-context-log-full.md` — rwContextLogFull() unified log
+5. `.riaworks-claude/claude-logs/ref/rw-skill-log.md` — Skill/agent activation logging
 
 After reading, report a summary of what you found.
 

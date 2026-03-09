@@ -17,12 +17,13 @@ This pack fixes all known structural bugs without adding any logging.
 ```
 aiox-fixes/
 ├── prompt-apply-fixes.md              # Self-service prompt (English)
-└── docs/
+├── ref/                               # Reference files (read by prompt)
+│   ├── 01-fix-hook-synapse.md         # SYNAPSE setup and installation
+│   ├── 02-fix-hooks-bugs.md           # 9 bug fixes with code
+│   └── 03-fix-windows-json-escape.md  # Windows JSON escape fix
+└── docs/                              # Documentation
     ├── manual.md                      # This file
-    ├── manual-pt-BR.md                # Portuguese version
-    ├── 01-fix-hook-synapse.md         # SYNAPSE setup and installation
-    ├── 02-fix-hooks-bugs.md           # 9 bug fixes with code
-    └── 03-fix-windows-json-escape.md  # Windows JSON escape fix
+    └── manual-pt-BR.md               # Portuguese version
 ```
 
 ## Prerequisites

@@ -13,7 +13,7 @@ I need you to apply all RIAWORKS hook fixes to this AIOX project. Apply ONLY the
 
 ## STEP 0 — VERIFY DOCUMENTATION
 
-Check if the folder `.riaworks-claude/aiox-fixes/docs/` exists at the project root (same level as `.aiox-core/`).
+Check if the folder `.riaworks-claude/aiox-fixes/ref/` exists at the project root (same level as `.aiox-core/`).
 
 If it does NOT exist, ask me:
 "The riaworks-claude submodule is not present. Can I clone it from
@@ -23,12 +23,12 @@ Wait for my confirmation before cloning. If it already exists, continue.
 
 ## STEP 1 — READ ALL FIX DOCUMENTATION
 
-Read these files from `.riaworks-claude/aiox-fixes/docs/`. They contain all fix details,
+Read these files from `.riaworks-claude/aiox-fixes/ref/`. They contain all fix details,
 code snippets, and expected behavior. Do NOT guess — use the exact code from these files:
 
-1. `.riaworks-claude/aiox-fixes/docs/01-fix-hook-synapse.md` — SYNAPSE setup requirements
-2. `.riaworks-claude/aiox-fixes/docs/02-fix-hooks-bugs.md` — All 9 bug fixes with code
-3. `.riaworks-claude/aiox-fixes/docs/03-fix-windows-json-escape.md` — JSON escape fix
+1. `.riaworks-claude/aiox-fixes/ref/01-fix-hook-synapse.md` — SYNAPSE setup requirements
+2. `.riaworks-claude/aiox-fixes/ref/02-fix-hooks-bugs.md` — All 9 bug fixes with code
+3. `.riaworks-claude/aiox-fixes/ref/03-fix-windows-json-escape.md` — JSON escape fix
 
 After reading, report a summary of what you found.
 

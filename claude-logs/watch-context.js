@@ -315,10 +315,10 @@ async function interactiveMenu(available) {
   const reset = C.reset();
 
   console.log('');
-  console.log(`${cyan}${bold}  ╔══════════════════════════════════════════════════════════╗${reset}`);
-  console.log(`${cyan}${bold}  ║        Claude Context Watcher                           ║${reset}`);
-  console.log(`${cyan}${bold}  ║        by RIAWORKS                                      ║${reset}`);
-  console.log(`${cyan}${bold}  ╚══════════════════════════════════════════════════════════╝${reset}`);
+  console.log(`${cyan}${bold}  ╔══════════════════════════════════════╗${reset}`);
+  console.log(`${cyan}${bold}  ║        Claude Context Watcher        ║${reset}`);
+  console.log(`${cyan}${bold}  ║        by RIAWORKS                   ║${reset}`);
+  console.log(`${cyan}${bold}  ╚══════════════════════════════════════╝${reset}`);
   console.log('');
   console.log(`  ${dim}Use setas ↑↓ para navegar, Enter para selecionar, q para sair${reset}`);
 

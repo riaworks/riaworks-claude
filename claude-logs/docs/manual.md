@@ -28,14 +28,15 @@ claude-logs/
 │   │   ├── hook-logger.js            # Unified logger library
 │   │   └── read-stdin.js             # Windows-safe stdin reader
 │   └── README.md                     # Hooks documentation
-└── docs/
+├── ref/                              # Reference files (read by prompt)
+│   ├── rw-hooks-log.md               # rwHooksLog() specification
+│   ├── rw-synapse-trace.md           # rwSynapseTrace() specification
+│   ├── rw-intel-context-log.md       # rwIntelContextLog() specification
+│   ├── rw-context-log-full.md        # rwContextLogFull() specification
+│   └── rw-skill-log.md              # rwSkillLog() specification
+└── docs/                             # Documentation
     ├── manual.md                     # This file
-    ├── manual-pt-BR.md               # Portuguese version
-    ├── rw-hooks-log.md               # rwHooksLog() documentation
-    ├── rw-synapse-trace.md           # rwSynapseTrace() documentation
-    ├── rw-intel-context-log.md       # rwIntelContextLog() documentation
-    ├── rw-context-log-full.md        # rwContextLogFull() documentation
-    └── 04-fix-skill-logging.md       # Skill activation logging
+    └── manual-pt-BR.md              # Portuguese version
 ```
 
 ## Logging Reference
@@ -57,7 +58,7 @@ Answers: "is the hook working or failing?"
 
 Records hook lifecycle events: session created, runtime resolved, errors. Does **not** record content (prompts, XML). First line of diagnosis.
 
-Full documentation: [`rw-hooks-log.md`](rw-hooks-log.md)
+Full specification: [`rw-hooks-log.md`](../ref/rw-hooks-log.md)
 
 ### 2. rw-synapse-trace — SYNAPSE XML Trace
 
@@ -65,7 +66,7 @@ Answers: "what rules exactly were injected?"
 
 Records the full SYNAPSE XML injected as `additionalContext` on every prompt. Use when you need to see the exact rules Claude received.
 
-Full documentation: [`rw-synapse-trace.md`](rw-synapse-trace.md)
+Full specification: [`rw-synapse-trace.md`](../ref/rw-synapse-trace.md)
 
 ### 3. rw-intel-context-log — Code-Intel Injection
 
@@ -73,7 +74,7 @@ Answers: "what code context was injected when the agent edited this file?"
 
 Records `<code-intel-context>` XML on Write/Edit operations and agent prompts loaded via Skill activation.
 
-Full documentation: [`rw-intel-context-log.md`](rw-intel-context-log.md)
+Full specification: [`rw-intel-context-log.md`](../ref/rw-intel-context-log.md)
 
 ### 4. rw-context-log-full — Unified Full Log
 
@@ -81,7 +82,7 @@ Answers: "what is the complete context Claude is receiving?"
 
 Captures everything in a single chronological log: user prompt, session, SYNAPSE XML, static context listing, code-intel XML, and agent prompts.
 
-Full documentation: [`rw-context-log-full.md`](rw-context-log-full.md)
+Full specification: [`rw-context-log-full.md`](../ref/rw-context-log-full.md)
 
 ### Individual vs Full
 

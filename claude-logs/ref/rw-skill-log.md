@@ -1,28 +1,28 @@
 # Fix: Skill/Agent Activation Logging
 
-**Data:** 2026-03-08
-**Componente:** `.claude/hooks/code-intel-pretool.cjs`, `.claude/settings.local.json`
-**Severidade:** Enhancement (logging extension)
+**Date:** 2026-03-08
+**Component:** `.claude/hooks/code-intel-pretool.cjs`, `.claude/settings.local.json`
+**Severity:** Enhancement (logging extension)
 
 ---
 
-## Problema
+## Problem
 
-Quando um agente AIOX e ativado via `/AIOX:agents:pm` (ou qualquer `/AIOX:agents:{name}`), o prompt do agente (YAML completo com persona, comandos, dependencias) e carregado pelo Skill tool do Claude Code. Esse conteudo:
+When an AIOX agent is activated via `/AIOX:agents:pm` (or any `/AIOX:agents:{name}`), the agent prompt (full YAML with persona, commands, dependencies) is loaded by the Claude Code Skill tool. This content:
 
-- NAO passa por nenhum hook existente
-- NAO e armazenado no JSONL do Claude
-- E completamente invisivel nos logs
+- Does NOT pass through any existing hook
+- Is NOT stored in Claude's JSONL
+- Is completely invisible in the logs
 
-O watcher (`watch-context.js`) mostra synapse-rules, code-intel, metricas — mas NAO mostra o prompt do agente carregado.
+The watcher (`watch-context.js`) shows synapse-rules, code-intel, metrics — but does NOT show the loaded agent prompt.
 
-## Solucao
+## Solution
 
-### 1. Adicionar `Skill` ao matcher do PreToolUse
+### 1. Add `Skill` to the PreToolUse matcher
 
-**Arquivo:** `.claude/settings.local.json`
+**File:** `.claude/settings.local.json`
 
-O hook `code-intel-pretool.cjs` so dispara em `Write|Edit`. Adicionando `Skill` ao matcher, o hook tambem dispara quando um Skill/agente e ativado.
+The `code-intel-pretool.cjs` hook only fires on `Write|Edit`. By adding `Skill` to the matcher, the hook also fires when a Skill/agent is activated.
 
 ```json
 "PreToolUse": [{
@@ -34,14 +34,14 @@ O hook `code-intel-pretool.cjs` so dispara em `Write|Edit`. Adicionando `Skill` 
 }]
 ```
 
-**Antes:** `"matcher": "Write|Edit"`
-**Depois:** `"matcher": "Write|Edit|Skill"`
+**Before:** `"matcher": "Write|Edit"`
+**After:** `"matcher": "Write|Edit|Skill"`
 
-### 2. Adicionar `rwSkillLog()` ao code-intel-pretool.cjs
+### 2. Add `rwSkillLog()` to code-intel-pretool.cjs
 
-**Arquivo:** `.claude/hooks/code-intel-pretool.cjs`
+**File:** `.claude/hooks/code-intel-pretool.cjs`
 
-Nova funcao que detecta Skill tool, resolve o arquivo do agente, le o conteudo e loga.
+New function that detects the Skill tool, resolves the agent file, reads its content, and logs it.
 
 ```javascript
 /**
@@ -112,11 +112,11 @@ function rwSkillLog(cwd, skillName, skillArgs) {
 }
 ```
 
-### 3. Adicionar handling de Skill no `main()`
+### 3. Add Skill handling in `main()`
 
-**Arquivo:** `.claude/hooks/code-intel-pretool.cjs`
+**File:** `.claude/hooks/code-intel-pretool.cjs`
 
-No inicio de `main()`, antes do check de `TARGET_TOOLS`, detectar Skill e logar:
+At the beginning of `main()`, before the `TARGET_TOOLS` check, detect Skill and log:
 
 ```javascript
 async function main() {
@@ -143,9 +143,9 @@ async function main() {
 }
 ```
 
-**Importante:** Para Skill, o hook apenas loga — NAO injeta `additionalContext`.
+**Important:** For Skill, the hook only logs — it does NOT inject `additionalContext`.
 
-### 4. Adicionar `rwSkillLog` ao module.exports
+### 4. Add `rwSkillLog` to module.exports
 
 ```javascript
 module.exports = { readStdin, main, run, rwIntelContextLog, rwSkillLog, HOOK_TIMEOUT_MS, TARGET_TOOLS };
@@ -153,19 +153,19 @@ module.exports = { readStdin, main, run, rwIntelContextLog, rwSkillLog, HOOK_TIM
 
 ---
 
-## Mapeamento de Skill para arquivo
+## Skill to File Mapping
 
-| Skill Name | Arquivo |
-|------------|---------|
+| Skill Name | File |
+|------------|------|
 | `AIOX:agents:pm` | `.aiox-core/development/agents/pm.md` |
 | `AIOX:agents:dev` | `.aiox-core/development/agents/dev.md` |
 | `AIOX:agents:qa` | `.aiox-core/development/agents/qa.md` |
 | `AIOX:agents:{name}` | `.aiox-core/development/agents/{name}.md` |
-| Skills built-in (commit, simplify) | Nao resolve arquivo — loga apenas o nome |
+| Built-in skills (commit, simplify) | Does not resolve a file — logs only the name |
 
-## Formato do log
+## Log Format
 
-### No rw-intel-context-log.log:
+### In rw-intel-context-log.log:
 
 ```
 ================================================================================
@@ -176,10 +176,10 @@ SKILL: AIOX:agents:pm -> .aiox-core/development/agents/pm.md
 # pm
 
 ACTIVATION-NOTICE: This file contains your full agent operating guidelines...
-(conteudo completo do agente)
+(full agent content)
 ```
 
-### No rw-context-log-full.log:
+### In rw-context-log-full.log:
 
 ```
 --------------------------------------------------------------------------------
@@ -191,28 +191,28 @@ ACTIVATION-NOTICE: This file contains your full agent operating guidelines...
 # pm
 
 ACTIVATION-NOTICE: This file contains your full agent operating guidelines...
-(conteudo completo do agente)
+(full agent content)
 ```
 
-## Verificacao
+## Verification
 
 ```bash
-# Simular ativacao de Skill
+# Simulate Skill activation
 echo '{"tool_name":"Skill","tool_input":{"skill":"AIOX:agents:pm"},"cwd":"DIR-MEU-PROJETO"}' \
   | RW_INTEL_CONTEXT_LOG=1 RW_CONTEXT_LOG_FULL=1 node .claude/hooks/code-intel-pretool.cjs 2>/dev/null
 
-# Verificar se foi logado
+# Verify it was logged
 grep "SKILL ACTIVATION" .logs/rw-intel-context-log.log && echo "OK" || echo "FAIL"
 grep "PreToolUse -- Skill" .logs/rw-context-log-full.log && echo "OK" || echo "FAIL"
 ```
 
-## Arquivos modificados
+## Modified Files
 
-| Arquivo | Mudanca |
-|---------|---------|
+| File | Change |
+|------|--------|
 | `.claude/settings.local.json` | matcher `Write\|Edit` → `Write\|Edit\|Skill` |
-| `.claude/hooks/code-intel-pretool.cjs` | `rwSkillLog()`, Skill handling em `main()`, `module.exports` |
+| `.claude/hooks/code-intel-pretool.cjs` | `rwSkillLog()`, Skill handling in `main()`, `module.exports` |
 
 ---
 
-*Documentado em 2026-03-08 — RIAWORKS*
+*Documented on 2026-03-08 — RIAWORKS*
