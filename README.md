@@ -8,10 +8,11 @@ RIAWORKS utilities for Claude Code — tools, fixes, and extensions.
 
 ### [`aiox-fixes`](aiox-fixes/)
 
-Fix pack for the Synkra AIOX hook system. Fixes 8 structural bugs via on-demand prompt.
+Fix pack for the Synkra AIOX hook system. Fixes 9 structural bugs + 1 Windows JSON escape via on-demand prompt.
 
-- `prompt-aplicar-fixes.md` — paste into Claude Code to apply all 8 fixes automatically
-- Fixes: hook errors, stdout cutoff on Windows, session persistence, orphan cleanup
+- `prompt-apply-fixes.md` — paste into Claude Code to apply all fixes automatically
+- `docs/` — 3 fix documentation files with exact code and verification commands
+- Fixes: hook registration, hookEventName, stdout pipe kill on Windows, session persistence, precompact runner, absolute paths, timeout, code-intel process.exit, precompact console.log/error, JSON backslash escape
 
 **Docs:** [English](aiox-fixes/docs/manual.md) | [Portugues](aiox-fixes/docs/manual-pt-BR.md)
 
@@ -19,14 +20,15 @@ Fix pack for the Synkra AIOX hook system. Fixes 8 structural bugs via on-demand 
 
 ### [`claude-logs`](claude-logs/)
 
-Unified logging system for Claude Code hooks. Wraps AIOX hooks with RIAWORKS logging and provides real-time monitoring.
+Logging system for AIOX Claude Code hooks. 4 log levels with independent env var control, optional hook wrappers, and real-time monitoring.
 
-- `hooks/` — Claude Code hooks with unified logging (`synapse-logged.cjs`, `code-intel-pretool.cjs`)
-- `watch-context.js` — Real-time log monitor (`tail -f` alternative)
-- Single env var: `RW_HOOK_LOG` (0=off, 1=summary, 2=verbose)
-- Single log file: `.logs/rw-hooks.log`
+- `prompt-apply-logging.md` — paste into Claude Code to add logging functions
+- `docs/` — 5 logging documentation files (rwHooksLog, rwSynapseTrace, rwIntelContextLog, rwContextLogFull, rwSkillLog)
+- `hooks/` — RIAWORKS hook wrappers with unified logging (`synapse-logged.cjs`, `code-intel-pretool.cjs`)
+- `watch-context.js` — Real-time log monitor
+- 4 env vars: `RW_HOOKS_LOG`, `RW_SYNAPSE_TRACE`, `RW_INTEL_CONTEXT_LOG`, `RW_CONTEXT_LOG_FULL`
 
-**Docs:** [Hooks Guide](claude-logs/docs/hooks-guide.md)
+**Docs:** [English](claude-logs/docs/manual.md) | [Portugues](claude-logs/docs/manual-pt-BR.md)
 
 ---
 
@@ -67,6 +69,6 @@ Utilitarios RIAWORKS para Claude Code — ferramentas, correcoes e extensoes.
 
 | Pacote | Descricao |
 |--------|-----------|
-| [`aiox-fixes`](aiox-fixes/) | 8 bug fixes do AIOX via prompt sob demanda |
-| [`claude-logs`](claude-logs/) | Sistema de logging unificado para hooks do Claude Code |
+| [`aiox-fixes`](aiox-fixes/) | 9 bug fixes + JSON escape fix do AIOX via prompt sob demanda |
+| [`claude-logs`](claude-logs/) | Sistema de logging com 4 niveis para hooks do Claude Code |
 | [`read-transcript`](read-transcript/) | Leitor interativo de transcripts de sessao |

@@ -375,10 +375,10 @@ function startWatcher(cwd, logsDir, available, logFilter, sinceStr) {
 
   // Print header
   console.log('');
-  console.log(`${cyan}${bold}  ╔══════════════════════════════════════════════════════════╗${reset}`);
-  console.log(`${cyan}${bold}  ║        Claude Context Watcher                           ║${reset}`);
-  console.log(`${cyan}${bold}  ║        by RIAWORKS                                      ║${reset}`);
-  console.log(`${cyan}${bold}  ╚══════════════════════════════════════════════════════════╝${reset}`);
+  console.log(`${cyan}${bold}  ╔══════════════════════════════════════╗${reset}`);
+  console.log(`${cyan}${bold}  ║        Claude Context Watcher        ║${reset}`);
+  console.log(`${cyan}${bold}  ║        by RIAWORKS                   ║${reset}`);
+  console.log(`${cyan}${bold}  ╚══════════════════════════════════════╝${reset}`);
   console.log('');
   console.log(`  ${dim}Projeto:${reset}   ${cwd}`);
   console.log(`  ${dim}Timezone:${reset}  ${getGMTLabel()}`);
