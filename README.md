@@ -41,8 +41,8 @@ Interactive CLI tool for reading and analyzing Claude Code session transcripts (
 - Zero external dependencies — Node.js stdlib only
 
 ```bash
-node read-transcript/read-transcript.js          # Interactive menu
-node read-transcript/read-transcript.js last      # Most recent session
+node .riaworks-claude/read-transcript/read-transcript.js          # Interactive menu
+node .riaworks-claude/read-transcript/read-transcript.js last      # Most recent session
 ```
 
 **Docs:** [English](read-transcript/docs/manual.md) | [Portugues](read-transcript/docs/manual-pt-BR.md)

@@ -60,17 +60,21 @@ Registered in `.claude/settings.local.json` (in the main project):
 
 ```json
 {
+  "env": {
+    "RW_HOOK_LOG": "1",
+    "RW_AIOX_LOG": "1"
+  },
   "hooks": {
     "UserPromptSubmit": [{
       "hooks": [{
         "type": "command",
-        "command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
+        "command": "node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
       }]
     }],
     "PreToolUse": [{
       "hooks": [{
         "type": "command",
-        "command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
+        "command": "node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
       }],
       "matcher": "Write|Edit|Skill"
     }],

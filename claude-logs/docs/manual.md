@@ -28,12 +28,8 @@ claude-logs/
 │   │   ├── rw-hook-logger.js        # Unified logger library
 │   │   └── rw-read-stdin.js         # Windows-safe stdin reader
 │   └── README.md                    # Hooks documentation
-├── ref/                              # Reference files (read by prompt)
-│   ├── rw-hooks-log.md              # Operational log specification
-│   ├── rw-synapse-trace.md          # SYNAPSE XML trace specification
-│   ├── rw-intel-context-log.md      # Code-intel injection specification
-│   ├── rw-context-log-full.md       # Unified full log specification
-│   └── rw-skill-log.md             # Skill/agent activation specification
+├── ref/                              # Reference files
+│   └── legacy/                      # Legacy log format specs (archived)
 └── docs/                             # Documentation
     ├── manual.md                     # This file
     └── manual-pt-BR.md             # Portuguese version
@@ -77,7 +73,7 @@ settings.local.json
 
 All events write to the same unified `.logs/rw-hooks.log` file.
 
-Full specifications: [`ref/rw-hooks-log.md`](../ref/rw-hooks-log.md), [`ref/rw-synapse-trace.md`](../ref/rw-synapse-trace.md), [`ref/rw-intel-context-log.md`](../ref/rw-intel-context-log.md), [`ref/rw-context-log-full.md`](../ref/rw-context-log-full.md), [`ref/rw-skill-log.md`](../ref/rw-skill-log.md)
+AIOX core also writes operational diagnostics to `.logs/rw-aiox-log.log` (env: `RW_AIOX_LOG=1`).
 
 ## Activate / Deactivate
 
@@ -87,17 +83,21 @@ Update `.claude/settings.local.json` to point to wrapper hooks:
 
 ```json
 {
+  "env": {
+    "RW_HOOK_LOG": "1",
+    "RW_AIOX_LOG": "1"
+  },
   "hooks": {
     "UserPromptSubmit": [{
       "hooks": [{
         "type": "command",
-        "command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
+        "command": "node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
       }]
     }],
     "PreToolUse": [{
       "hooks": [{
         "type": "command",
-        "command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
+        "command": "node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
       }],
       "matcher": "Write|Edit|Skill"
     }],
@@ -145,11 +145,12 @@ Change `.claude/settings.local.json` back to the AIOX original hooks:
 
 ### Disable logging only (keep wrappers)
 
-Remove `RW_HOOK_LOG=1` from the commands:
+Remove `RW_HOOK_LOG` from the `env` section (or set to `"0"`):
 
 ```json
-"command": "node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
-"command": "node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
+"env": {
+  "RW_AIOX_LOG": "1"
+}
 ```
 
 ### Behavior (all logs)

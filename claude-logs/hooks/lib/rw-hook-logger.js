@@ -6,8 +6,8 @@
  * Env: RW_HOOK_LOG = 0 (off) | 1 (summary) | 2 (verbose with full XML)
  * File: .logs/rw-hooks.log
  *
- * Replaces: RW_HOOKS_LOG, RW_SYNAPSE_TRACE, RW_CONTEXT_LOG_FULL, RW_INTEL_CONTEXT_LOG
- * Note: AIOX core still writes to .logs/rw-hooks-log.log via its own rwHooksLog.
+ * Replaces: RW_SYNAPSE_TRACE, RW_CONTEXT_LOG_FULL, RW_INTEL_CONTEXT_LOG
+ * Note: AIOX core writes to .logs/rw-aiox-log.log via rwHooksLog (env: RW_AIOX_LOG=1).
  *
  * @module riaworks/lib/rw-hook-logger
  */

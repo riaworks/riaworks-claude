@@ -30,15 +30,12 @@ Wait for my confirmation before cloning. If all files exist, continue.
 
 ## STEP 1 — READ PLUGIN DOCUMENTATION
 
-Read these reference files to understand what the plugin does:
+Read `.riaworks-claude/claude-logs/hooks/README.md` to understand the plugin architecture.
 
-1. `.riaworks-claude/claude-logs/ref/rw-hooks-log.md` — Operational log spec
-2. `.riaworks-claude/claude-logs/ref/rw-synapse-trace.md` — SYNAPSE trace spec
-3. `.riaworks-claude/claude-logs/ref/rw-intel-context-log.md` — Code-intel log spec
-4. `.riaworks-claude/claude-logs/ref/rw-context-log-full.md` — Unified log spec
-5. `.riaworks-claude/claude-logs/ref/rw-skill-log.md` — Skill activation log spec
-
-After reading, report a summary of what the plugin provides.
+Key points:
+- Unified log: `.logs/rw-hooks.log` (env: `RW_HOOK_LOG=1|2`)
+- AIOX operational log: `.logs/rw-aiox-log.log` (env: `RW_AIOX_LOG=1`)
+- 3 event types: SYNAPSE, CODE-INTEL, SKILL
 
 ## STEP 2 — CHECK CURRENT CONFIGURATION
 
@@ -116,17 +113,21 @@ Show me the final configuration before applying. I will confirm.
 
 Ask me which logging level I want:
 
-| Level | Command prefix | Log weight |
-|-------|---------------|------------|
-| Off (default) | (none) | None |
-| Summary | `RW_HOOK_LOG=1` | ~200B/prompt |
-| Verbose (with XML) | `RW_HOOK_LOG=2` | ~4KB/prompt |
+| Level | Env value | Log weight |
+|-------|-----------|------------|
+| Off (default) | (unset) | None |
+| Summary | `"1"` | ~200B/prompt |
+| Verbose (with XML) | `"2"` | ~4KB/prompt |
 
-If I choose a level, add the env var prefix to BOTH hook commands:
+If I choose a level, add `RW_HOOK_LOG` to the `env` section of settings.local.json:
 ```json
-"command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
-"command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
+"env": {
+  "RW_HOOK_LOG": "1",
+  "RW_AIOX_LOG": "1"
+}
 ```
+
+The `env` section applies to ALL hooks — no need to prefix each command individually.
 
 ## STEP 5 — VALIDATION
 
@@ -134,9 +135,11 @@ Run the verification command and report the result:
 
 ```bash
 echo '{"prompt":"test","session_id":"verify-log","cwd":"'$(pwd)'"}' \
-  | RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs 2>/dev/null \
+  | node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs 2>/dev/null \
   && echo "Hook executed successfully"
 ```
+
+Note: The `env` section in settings.local.json sets `RW_HOOK_LOG` automatically. For manual testing, set it inline: `RW_HOOK_LOG=1 node ...`
 
 If `.logs/rw-hooks.log` was created, report its contents.
 

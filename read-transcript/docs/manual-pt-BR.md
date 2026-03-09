@@ -7,7 +7,7 @@ Leitor interativo de transcripts (sessoes) do Claude Code. Faz parse dos arquivo
 ## Localizacao
 
 ```
-read-transcript/read-transcript.js
+.riaworks-claude/read-transcript/read-transcript.js
 ```
 
 ## Requisitos
@@ -18,7 +18,7 @@ read-transcript/read-transcript.js
 ## Modo Interativo (Menu)
 
 ```bash
-node read-transcript/read-transcript.js
+node .riaworks-claude/read-transcript/read-transcript.js
 ```
 
 Abre o menu principal com as opcoes:
@@ -81,19 +81,19 @@ Para uso em scripts ou acesso rapido:
 
 ```bash
 # Sessao especifica do projeto atual
-node read-transcript/read-transcript.js <session-id>
+node .riaworks-claude/read-transcript/read-transcript.js <session-id>
 
 # Sessao mais recente
-node read-transcript/read-transcript.js last
+node .riaworks-claude/read-transcript/read-transcript.js last
 
 # Modo completo (sem truncar)
-node read-transcript/read-transcript.js --full last
+node .riaworks-claude/read-transcript/read-transcript.js --full last
 
 # Outro projeto
-node read-transcript/read-transcript.js --cwd /c/_sistemas/outro-projeto
+node .riaworks-claude/read-transcript/read-transcript.js --cwd /c/_sistemas/outro-projeto
 
 # Ajuda
-node read-transcript/read-transcript.js --help
+node .riaworks-claude/read-transcript/read-transcript.js --help
 ```
 
 ## Deteccao de diretorio (Cross-Platform)

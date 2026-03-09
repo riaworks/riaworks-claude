@@ -7,7 +7,7 @@ Interactive reader for Claude Code session transcripts. Parses the `.jsonl` file
 ## Location
 
 ```
-read-transcript/read-transcript.js
+.riaworks-claude/read-transcript/read-transcript.js
 ```
 
 ## Requirements
@@ -18,7 +18,7 @@ read-transcript/read-transcript.js
 ## Interactive Mode (Menu)
 
 ```bash
-node read-transcript/read-transcript.js
+node .riaworks-claude/read-transcript/read-transcript.js
 ```
 
 Opens the main menu:
@@ -81,19 +81,19 @@ For scripting or quick access:
 
 ```bash
 # Specific session from current project
-node read-transcript/read-transcript.js <session-id>
+node .riaworks-claude/read-transcript/read-transcript.js <session-id>
 
 # Most recent session
-node read-transcript/read-transcript.js last
+node .riaworks-claude/read-transcript/read-transcript.js last
 
 # Full mode (no truncation)
-node read-transcript/read-transcript.js --full last
+node .riaworks-claude/read-transcript/read-transcript.js --full last
 
 # Different project
-node read-transcript/read-transcript.js --cwd /path/to/other/project
+node .riaworks-claude/read-transcript/read-transcript.js --cwd /path/to/other/project
 
 # Help
-node read-transcript/read-transcript.js --help
+node .riaworks-claude/read-transcript/read-transcript.js --help
 ```
 
 ## Directory Detection (Cross-Platform)

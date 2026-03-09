@@ -12,16 +12,12 @@ const path = require('path');
 // Claude's JSONL does NOT store context injections (they are ephemeral).
 // The only way to capture them is via hook logs:
 //   .logs/rw-hooks.log             — unified log (RIAWORKS wrapper hooks)
-//   .logs/rw-context-log-full.log  — full hook output (legacy)
-//   .logs/rw-synapse-trace.log     — synapse-rules XML (legacy)
-//   .logs/rw-hooks-log.log         — summary metrics (legacy)
+//   .logs/rw-aiox-log.log          — AIOX core operational log (env: RW_AIOX_LOG=1)
 //
 // Usage:
 //   node rw-watch-context.js                 # Interactive menu
 //   node rw-watch-context.js --log unified   # Unified log only (rw-hooks.log)
-//   node rw-watch-context.js --log full      # Full context log (legacy)
-//   node rw-watch-context.js --log synapse   # Synapse trace (legacy)
-//   node rw-watch-context.js --log hooks     # Summary metrics (legacy)
+//   node rw-watch-context.js --log aiox      # AIOX core operational log
 //   node rw-watch-context.js --cwd /path     # Different project
 //   node rw-watch-context.js --no-color      # No ANSI colors
 //   node rw-watch-context.js --since 5m      # Last 5 minutes only
@@ -44,6 +40,15 @@ const C = {
   red: () => useColor ? '\x1b[31m' : '',
   blue: () => useColor ? '\x1b[34m' : '',
   white: () => useColor ? '\x1b[37m' : '',
+};
+
+// ── Section colors for unified log ────────────────────────────────────────
+
+const SECTION_COLORS = {
+  'SYNAPSE': C.cyan,
+  'CODE-INTEL': C.blue,
+  'SKILL': C.magenta,
+  'ERROR': C.red,
 };
 
 // ── Time helpers ────────────────────────────────────────────────────────────
@@ -87,29 +92,11 @@ const LOG_FILES = {
     color: C.green,
     description: 'Unified RIAWORKS log (synapse + code-intel + skills)',
   },
-  full: {
-    filename: 'rw-context-log-full.log',
-    label: 'CONTEXT',
-    color: C.cyan,
-    description: 'Full hook output — synapse-rules + static context + skills (legacy)',
-  },
-  synapse: {
-    filename: 'rw-synapse-trace.log',
-    label: 'SYNAPSE',
-    color: C.magenta,
-    description: 'Synapse-rules XML — constitution, bracket, rules (legacy)',
-  },
-  intel: {
-    filename: 'rw-intel-context-log.log',
-    label: 'INTEL',
-    color: C.blue,
-    description: 'Code-intel + Skill activations (legacy)',
-  },
-  hooks: {
-    filename: 'rw-hooks-log.log',
-    label: 'HOOKS',
+  aiox: {
+    filename: 'rw-aiox-log.log',
+    label: 'AIOX',
     color: C.yellow,
-    description: 'Summary metrics — session, rules count, bytes (legacy)',
+    description: 'AIOX core operational log (session, cleanup, runtime)',
   },
 };
 
@@ -128,6 +115,7 @@ function tailFile(filePath, label, colorFn, sinceMs) {
   let fileSize = 0;
   let lineBuffer = '';
   let initialDump = true;
+  let currentSection = null; // Track active section type for unified log coloring
 
   try {
     const stat = fs.statSync(filePath);
@@ -184,7 +172,90 @@ function tailFile(filePath, label, colorFn, sinceMs) {
         }
       }
 
-      // Format the line
+      // ── Unified log: section-aware colored rendering ──────────
+      if (label === 'UNIFIED') {
+        // Section headers: --- SYNAPSE ---- HH:MM:SS ---
+        const sectionMatch = line.match(/^--- (\S+) -+ (\d{2}:\d{2}:\d{2}) ---$/);
+        if (sectionMatch) {
+          currentSection = sectionMatch[1];
+          const sTime = sectionMatch[2];
+          const sColorFn = SECTION_COLORS[currentSection] || C.yellow;
+          const sCol = sColorFn();
+          const today = new Date().toLocaleDateString('sv-SE');
+          console.log('');
+          console.log(`${dim}${'─'.repeat(70)}${reset}`);
+          console.log(`  ${sCol}${bold}${currentSection}${reset}  ${dim}${today} ${sTime}${reset}`);
+          console.log(`${dim}${'─'.repeat(70)}${reset}`);
+          continue;
+        }
+
+        const sColorFn = SECTION_COLORS[currentSection] || C.yellow;
+        const sCol = sColorFn();
+
+        // Sub-section markers: --- injected xml ---, --- end xml ---, etc.
+        const subMatch = line.match(/^\s*--- (.+) ---\s*$/);
+        if (subMatch) {
+          console.log(`  ${dim}${sCol}\u25b8 ${subMatch[1]}${reset}`);
+          continue;
+        }
+
+        // Constitution / NON-NEGOTIABLE (before kv match — "MUST:" matches kv regex)
+        if (line.includes('[CONSTITUTION]') || line.includes('NON-NEGOTIABLE')) {
+          console.log(`    ${C.red()}${bold}${line.trim()}${reset}`);
+          continue;
+        }
+
+        // Context bracket (before kv match — "CONTEXT BRACKET:" matches kv regex)
+        if (line.includes('CONTEXT BRACKET') || line.match(/\[(FRESH|WARM|HOT)\]/)) {
+          console.log(`    ${C.green()}${bold}${line.trim()}${reset}`);
+          continue;
+        }
+
+        // MUST / SHOULD rules (before kv match)
+        if (line.includes('MUST:') || line.includes('MUST NOT:') || line.includes('SHOULD:') || line.includes('SHOULD NOT:') || line.includes('EXCEPTION:')) {
+          console.log(`    ${dim}${line.trim()}${reset}`);
+          continue;
+        }
+
+        // XML tags (before kv match)
+        if (line.trim().startsWith('<') || line.trim().startsWith('</')) {
+          console.log(`    ${dim}${line.trim()}${reset}`);
+          continue;
+        }
+
+        // Numbered rules (before kv match)
+        if (line.trim().match(/^\d+\.\s/)) {
+          console.log(`    ${dim}${line.trim()}${reset}`);
+          continue;
+        }
+
+        // Pipeline/layers metrics (before kv match)
+        if (line.includes('pipeline:') || line.includes('layers:')) {
+          console.log(`  ${sCol}${line.trim()}${reset}`);
+          continue;
+        }
+
+        // Key-value lines: "  key:  value" or "  key: value"
+        const kvMatch = line.match(/^(\s+)([\w][\w\s-]*?):\s{1,}(.+)$/);
+        if (kvMatch) {
+          console.log(`  ${sCol}${bold}${kvMatch[2]}:${reset} ${kvMatch[3]}`);
+          continue;
+        }
+
+        // Operational log: [ISO] [LEVEL] message
+        const opMatch = line.match(/^\[(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)\]\s*\[(\w+)\]\s*(.+)$/);
+        if (opMatch) {
+          const lvlColor = opMatch[2] === 'ERROR' ? C.red() : opMatch[2] === 'WARN' ? C.yellow() : dim;
+          console.log(`  ${dim}${toLocalTime(new Date(opMatch[1]))}${reset} ${lvlColor}${bold}[${opMatch[2]}]${reset} ${opMatch[3]}`);
+          continue;
+        }
+
+        // Everything else
+        console.log(`  ${line.trim()}`);
+        continue;
+      }
+
+      // ── Legacy log rendering ──────────────────────────────────
       const isSection = line.startsWith('[') && line.includes(']');
       const isXmlTag = line.trim().startsWith('<') || line.trim().startsWith('</');
       const isRule = line.trim().match(/^\d+\.\s/) || line.includes('MUST:') || line.includes('SHOULD:');
@@ -193,7 +264,6 @@ function tailFile(filePath, label, colorFn, sinceMs) {
       const isStatic = line.includes('[STATIC CONTEXT]');
       const isMetric = line.includes('Hook output:') || line.includes('Runtime resolved');
       const isSkill = line.includes('SKILL ACTIVATION') || line.includes('[SKILL]') || line.includes('[AGENT PROMPT]');
-      const isYaml = line.trim().match(/^[a-zA-Z_-]+:/) || line.trim().startsWith('- ');
 
       let prefix = `${dim}${color}[${label}]${reset} `;
 
@@ -206,7 +276,6 @@ function tailFile(filePath, label, colorFn, sinceMs) {
       } else if (isStatic) {
         console.log(`${prefix}${C.blue()}${bold}${line}${reset}`);
       } else if (isMetric) {
-        // Extract and colorize metrics
         const localTs = line.match(/^\[(.+?)\]/)
           ? toLocalTime(new Date(line.match(/^\[(.+?)\]/)[1]))
           : '';
@@ -332,7 +401,7 @@ async function interactiveMenu(available) {
 
   // ── Menu 1: Log source ──
   const logItems = [
-    { label: 'All logs', value: null, desc: '(unified + legacy)' },
+    { label: 'All logs', value: null, desc: '(unified + aiox)' },
   ];
   for (const [key, def] of Object.entries(available)) {
     const size = (fs.statSync(def.filePath).size / 1024).toFixed(1);
@@ -480,7 +549,7 @@ async function main() {
 
   if (Object.keys(available).length === 0) {
     console.error('No hook log files found in .logs/');
-    console.error('Expected: rw-hooks.log (or legacy: rw-context-log-full.log, rw-synapse-trace.log, rw-hooks-log.log)');
+    console.error('Expected: rw-hooks.log or rw-aiox-log.log');
     process.exit(1);
   }
 
@@ -512,9 +581,7 @@ function printHelp() {
   console.log(`  ${bold}Usage:${reset}`);
   console.log('    node rw-watch-context.js                  # Interactive menu');
   console.log('    node rw-watch-context.js --log unified    # Unified log only (rw-hooks.log)');
-  console.log('    node rw-watch-context.js --log full       # Full context log (legacy)');
-  console.log('    node rw-watch-context.js --log synapse    # Synapse trace (legacy)');
-  console.log('    node rw-watch-context.js --log hooks      # Summary metrics (legacy)');
+  console.log('    node rw-watch-context.js --log aiox       # AIOX core operational log');
   console.log('    node rw-watch-context.js --since 5m       # Last 5 minutes');
   console.log('    node rw-watch-context.js --since 1h       # Last hour');
   console.log('    node rw-watch-context.js --cwd /path      # Different project');
@@ -527,9 +594,7 @@ function printHelp() {
   console.log('');
   console.log(`  ${bold}Monitored logs:${reset}`);
   console.log(`    ${C.green()}[UNIFIED]${reset}  rw-hooks.log             — Unified RIAWORKS log (synapse + code-intel + skills)`);
-  console.log(`    ${C.cyan()}[CONTEXT]${reset}  rw-context-log-full.log  — Full hook output (legacy)`);
-  console.log(`    ${C.magenta()}[SYNAPSE]${reset}  rw-synapse-trace.log    — Synapse-rules XML (legacy)`);
-  console.log(`    ${C.yellow()}[HOOKS]${reset}    rw-hooks-log.log        — Summary metrics (legacy)`);
+  console.log(`    ${C.yellow()}[AIOX]${reset}     rw-aiox-log.log          — AIOX core operational log (env: RW_AIOX_LOG=1)`);
   console.log('');
   console.log(`  ${bold}Tip:${reset} Open in a separate terminal while using Claude Code.`);
   console.log(`  ${dim}Each prompt you send triggers hooks and generates new log entries.${reset}`);
