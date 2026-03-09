@@ -1,4 +1,4 @@
-# RIAWORKS Hooks
+# RIAWORKS Claude Logs — Hooks
 
 Hooks customizados do projeto RIAWORKS que estendem os hooks AIOX com logging e code intelligence.
 
@@ -7,18 +7,24 @@ Hooks customizados do projeto RIAWORKS que estendem os hooks AIOX com logging e 
 | Diretório | Dono | Modificável |
 |-----------|------|-------------|
 | `.claude/hooks/` | **AIOX** (original do framework) | NUNCA modificar |
-| `.riaworks-claude/hooks/` | **RIAWORKS** (projeto) | Livre |
+| `.riaworks-claude/claude-logs/hooks/` | **RIAWORKS** (projeto) | Livre |
 
 ## Estrutura
 
 ```
-.riaworks-claude/hooks/
-├── lib/
-│   ├── hook-logger.js          ← Logger unificado (zero deps AIOX)
-│   └── read-stdin.js           ← Leitor stdin (Windows-safe)
-├── synapse-logged.cjs          ← Wrapper RIAWORKS do synapse-engine (adiciona logging)
-├── code-intel-pretool.cjs      ← Hook code-intel (PreToolUse: Write|Edit|Skill)
-└── README.md
+.riaworks-claude/claude-logs/
+├── hooks/
+│   ├── lib/
+│   │   ├── hook-logger.js          ← Logger unificado (zero deps AIOX)
+│   │   └── read-stdin.js           ← Leitor stdin (Windows-safe)
+│   ├── synapse-logged.cjs          ← Wrapper RIAWORKS do synapse-engine (adiciona logging)
+│   ├── code-intel-pretool.cjs      ← Hook code-intel (PreToolUse: Write|Edit|Skill)
+│   └── README.md                   ← Este arquivo
+├── watch-context.js                ← Monitor de logs em tempo real
+└── docs/
+    ├── hooks-guide.md              ← Guia completo do sistema de hooks
+    ├── ativar-log-aios.md          ← Prompt: ativar hookLog() no AIOX core
+    └── prompt-aplicar-log-system.md ← Prompt: aplicar no aios-core-fork
 ```
 
 ## Como Funciona
@@ -51,14 +57,14 @@ Leitor stdin compartilhado com sanitização de backslashes para Windows.
 
 ## Configuração
 
-Registrado em `.claude/settings.local.json`:
+Registrado em `.claude/settings.local.json` (no projeto principal):
 
 ```json
 {
   "env": { "RW_HOOK_LOG": "2" },
   "hooks": {
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node .riaworks-claude/hooks/synapse-logged.cjs" }] }],
-    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "node .riaworks-claude/hooks/code-intel-pretool.cjs" }], "matcher": "Write|Edit|Skill" }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node .riaworks-claude/claude-logs/hooks/synapse-logged.cjs" }] }],
+    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "node .riaworks-claude/claude-logs/hooks/code-intel-pretool.cjs" }], "matcher": "Write|Edit|Skill" }],
     "PreCompact": [{ "hooks": [{ "type": "command", "command": "node .claude/hooks/precompact-wrapper.cjs" }] }]
   }
 }
@@ -67,9 +73,13 @@ Registrado em `.claude/settings.local.json`:
 ## Watch Logs
 
 ```bash
+# Via watch-context.js (recomendado)
+node .riaworks-claude/claude-logs/watch-context.js
+
+# Ou diretamente
 tail -f .logs/rw-hooks.log
 ```
 
 ## Documentação Completa
 
-Ver `docs/hooks-context-injection-guide.md`.
+Ver `claude-logs/docs/hooks-guide.md`.

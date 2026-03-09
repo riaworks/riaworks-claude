@@ -22,7 +22,7 @@ const { readStdin } = require('./lib/read-stdin');
 const logger = require('./lib/hook-logger');
 
 // ── AIOX core path (resolved lazily) ───────────────────
-const AIOX_CODE_INTEL = path.join(__dirname, '..', '..', '.aiox-core', 'core', 'code-intel', 'hook-runtime.js');
+const AIOX_CODE_INTEL = path.join(__dirname, '..', '..', '..', '.aiox-core', 'core', 'code-intel', 'hook-runtime.js');
 
 /** Tools that trigger code-intel injection. */
 const TARGET_TOOLS = new Set(['Write', 'Edit']);

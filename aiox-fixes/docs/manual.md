@@ -1,18 +1,19 @@
-# AIOS/AIOX Hook Fix Pack — Manual
+# AIOX Hook Fix Pack — Manual
 
-Fix pack for the Synkra AIOS/AIOX hook system. Contains 4 corrected files ready to apply to any AIOS project.
+Fix pack for the Synkra AIOX hook system. Contains 4 corrected files ready to apply to any AIOX project.
 
 ## Pack Contents
 
 ```
-aios-aiox-fixes/
+aiox-fixes/
 ├── hook-fix-pack/
-│   ├── hook-runtime.js                  # Main hook runtime
-│   ├── synapse-engine.cjs               # UserPromptSubmit hook
-│   ├── precompact-session-digest.cjs    # PreCompact hook
-│   └── settings.json                    # Claude hook configuration
-├── ativar-log-aios.md                   # Prompt to enable logging (step by step)
-└── prompt-aplicar-log-system.md         # Prompt to apply on aios-core-fork
+│   ├── hook-runtime.js                  # Main hook runtime (patched)
+│   ├── synapse-engine.cjs               # UserPromptSubmit hook (patched)
+│   ├── precompact-session-digest.cjs    # PreCompact hook (patched)
+│   └── settings.json                    # Claude hook configuration (corrected)
+└── docs/
+    ├── manual.md                        # This file
+    └── manual-pt-BR.md                  # Portuguese version
 ```
 
 ## File Mapping
@@ -60,26 +61,15 @@ cat .logs/hooks.log 2>/dev/null || echo "Log will be created on next prompt"
 cat .logs/hooks.log
 ```
 
-### Method 2: Prompt in Claude Code
+### Method 2: Manual copy from hook-fix-pack
 
-Copy the full content of `ativar-log-aios.md` and paste it into Claude Code in the target project. Claude will apply all changes automatically.
+Copy each file from `hook-fix-pack/` to the correct destination (see mapping table above).
 
-## Logging System
+## Logging
 
-The fix pack adds the `hookLog()` function that writes logs to `.logs/hooks.log`:
+The patched `hook-runtime.js` includes a `hookLog()` function for diagnostic logging to `.logs/hooks.log`.
 
-```
-[2026-03-04T00:34:19.976Z] [INFO] Session created: abc-123-def
-[2026-03-04T00:34:19.980Z] [INFO] Runtime resolved — session=abc-123-def, prompt_count=0, bracket=FRESH
-[2026-03-04T00:34:20.150Z] [INFO] Hook output: 25 rules, bracket=FRESH, xml=2847 bytes
-```
-
-Characteristics:
-- **Fire-and-forget** — never blocks hook execution
-- `.logs/` has `.gitignore` with `*` — never gets committed to git
-- Directory created automatically on first prompt
-- To disable: remove `hookLog()` calls or delete `.logs/`
-- For rotation: manually delete `.logs/hooks.log` when it grows
+For a full RIAWORKS logging system (unified logger, env var control, real-time monitoring), see the separate **claude-logs** package.
 
 ## settings.json Configuration
 
@@ -111,6 +101,11 @@ Key points:
 
 Based on PR #551 (riaworks/aios-core) + CodeRabbit review + aios-bug/ documentation.
 
+## Related Packages
+
+- **claude-logs** — RIAWORKS unified logging system (hooks, watch-context, env var control)
+- **read-transcript** — Interactive Claude Code transcript reader
+
 ---
 
-*By RIAWORKS — 2026-03-04*
+*By RIAWORKS — 2026-03-08*

@@ -27,7 +27,7 @@ const { readStdin } = require('./lib/read-stdin');
 const logger = require('./lib/hook-logger');
 
 // ── AIOX core paths (resolved from project root) ────────
-const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 const AIOX_HOOK_RUNTIME = path.join(PROJECT_ROOT, '.aiox-core', 'core', 'synapse', 'runtime', 'hook-runtime.js');
 const AIOX_SESSION_MGR = path.join(PROJECT_ROOT, '.aiox-core', 'core', 'synapse', 'session', 'session-manager.js');
 

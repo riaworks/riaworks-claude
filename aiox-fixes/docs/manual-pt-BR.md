@@ -1,18 +1,19 @@
-# AIOS/AIOX Hook Fix Pack — Manual (PT-BR)
+# AIOX Hook Fix Pack — Manual (PT-BR)
 
-Pack de correções para o sistema de hooks do Synkra AIOS/AIOX. Contém 4 arquivos corrigidos prontos para aplicar em qualquer projeto AIOS.
+Pack de correcoes para o sistema de hooks do Synkra AIOX. Contem 4 arquivos corrigidos prontos para aplicar em qualquer projeto AIOX.
 
 ## Conteudo do Pack
 
 ```
-aios-aiox-fixes/
+aiox-fixes/
 ├── hook-fix-pack/
-│   ├── hook-runtime.js                  # Runtime principal dos hooks
-│   ├── synapse-engine.cjs               # Hook de UserPromptSubmit
-│   ├── precompact-session-digest.cjs    # Hook de PreCompact
-│   └── settings.json                    # Configuracao de hooks do Claude
-├── ativar-log-aios.md                   # Prompt para ativar logs (passo a passo)
-└── prompt-aplicar-log-system.md         # Prompt para aplicar no aios-core-fork
+│   ├── hook-runtime.js                  # Runtime principal dos hooks (patcheado)
+│   ├── synapse-engine.cjs               # Hook de UserPromptSubmit (patcheado)
+│   ├── precompact-session-digest.cjs    # Hook de PreCompact (patcheado)
+│   └── settings.json                    # Configuracao de hooks do Claude (corrigido)
+└── docs/
+    ├── manual.md                        # Versao em ingles
+    └── manual-pt-BR.md                  # Este arquivo
 ```
 
 ## Mapeamento de Arquivos
@@ -60,26 +61,15 @@ cat .logs/hooks.log 2>/dev/null || echo "Log sera criado no proximo prompt"
 cat .logs/hooks.log
 ```
 
-### Metodo 2: Prompt no Claude Code
+### Metodo 2: Copia manual do hook-fix-pack
 
-Copie o conteudo completo de `ativar-log-aios.md` e cole no Claude Code do projeto alvo. O Claude aplicara todas as alteracoes automaticamente.
+Copie cada arquivo de `hook-fix-pack/` para o destino correto (ver tabela acima).
 
-## Sistema de Log
+## Logging
 
-O fix pack adiciona a funcao `hookLog()` que grava logs em `.logs/hooks.log`:
+O `hook-runtime.js` patcheado inclui a funcao `hookLog()` para logging diagnostico em `.logs/hooks.log`.
 
-```
-[2026-03-04T00:34:19.976Z] [INFO] Session created: abc-123-def
-[2026-03-04T00:34:19.980Z] [INFO] Runtime resolved — session=abc-123-def, prompt_count=0, bracket=FRESH
-[2026-03-04T00:34:20.150Z] [INFO] Hook output: 25 rules, bracket=FRESH, xml=2847 bytes
-```
-
-Caracteristicas:
-- **Fire-and-forget** — nunca bloqueia a execucao do hook
-- `.logs/` tem `.gitignore` com `*` — nunca sobe pro git
-- Diretorio criado automaticamente no primeiro prompt
-- Para desativar: remova as chamadas de `hookLog()` ou delete `.logs/`
-- Para rotacao: delete `.logs/hooks.log` manualmente
+Para um sistema completo de logging RIAWORKS (logger unificado, controle por env var, monitoramento em tempo real), veja o package separado **claude-logs**.
 
 ## Configuracao do settings.json
 
@@ -111,6 +101,11 @@ Pontos importantes:
 
 Baseado no PR #551 (riaworks/aios-core) + review CodeRabbit + documentacao em aios-bug/.
 
+## Packages Relacionados
+
+- **claude-logs** — Sistema de logging unificado RIAWORKS (hooks, watch-context, controle por env var)
+- **read-transcript** — Leitor interativo de transcripts do Claude Code
+
 ---
 
-*By RIAWORKS — 2026-03-04*
+*By RIAWORKS — 2026-03-08*
