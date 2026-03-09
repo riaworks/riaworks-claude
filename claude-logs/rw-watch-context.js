@@ -4,25 +4,27 @@ const fs = require('fs');
 const path = require('path');
 
 // ===========================================================================
-// watch-context.js — Monitor de contexto injetado pelo Claude Code
+// rw-watch-context.js — Real-time monitor for Claude Code hook logs
 //
-// Faz tail-follow nos logs de hook do AIOS/AIOX para mostrar em tempo real
-// o que esta sendo injetado no contexto da sessao Claude.
+// Tail-follows RIAWORKS hook log files to show in real time what is being
+// injected into the Claude session context.
 //
-// O JSONL do Claude NAO armazena as injecoes (sao efemeras na API).
-// A unica forma de capturar e via logs de hook:
-//   .logs/rw-context-log-full.log  — output completo do hook
-//   .logs/rw-synapse-trace.log     — synapse-rules XML
-//   .logs/rw-hooks-log.log         — metricas resumidas
+// Claude's JSONL does NOT store context injections (they are ephemeral).
+// The only way to capture them is via hook logs:
+//   .logs/rw-hooks.log             — unified log (RIAWORKS wrapper hooks)
+//   .logs/rw-context-log-full.log  — full hook output (legacy)
+//   .logs/rw-synapse-trace.log     — synapse-rules XML (legacy)
+//   .logs/rw-hooks-log.log         — summary metrics (legacy)
 //
-// Uso:
-//   node watch-context.js                 # Monitora todos os logs
-//   node watch-context.js --log full      # Apenas context-log-full
-//   node watch-context.js --log synapse   # Apenas synapse-trace
-//   node watch-context.js --log hooks     # Apenas hooks-log (metricas)
-//   node watch-context.js --cwd /path     # Outro projeto
-//   node watch-context.js --no-color      # Sem cores ANSI
-//   node watch-context.js --since 5m      # Apenas ultimos 5 minutos
+// Usage:
+//   node rw-watch-context.js                 # Interactive menu
+//   node rw-watch-context.js --log unified   # Unified log only (rw-hooks.log)
+//   node rw-watch-context.js --log full      # Full context log (legacy)
+//   node rw-watch-context.js --log synapse   # Synapse trace (legacy)
+//   node rw-watch-context.js --log hooks     # Summary metrics (legacy)
+//   node rw-watch-context.js --cwd /path     # Different project
+//   node rw-watch-context.js --no-color      # No ANSI colors
+//   node rw-watch-context.js --since 5m      # Last 5 minutes only
 //
 // By RIAWORKS
 // ===========================================================================
@@ -79,29 +81,35 @@ function parseDuration(str) {
 // ── Log file definitions ────────────────────────────────────────────────────
 
 const LOG_FILES = {
+  unified: {
+    filename: 'rw-hooks.log',
+    label: 'UNIFIED',
+    color: C.green,
+    description: 'Unified RIAWORKS log (synapse + code-intel + skills)',
+  },
   full: {
     filename: 'rw-context-log-full.log',
     label: 'CONTEXT',
     color: C.cyan,
-    description: 'Output completo do hook (synapse-rules + static context + skills)',
+    description: 'Full hook output — synapse-rules + static context + skills (legacy)',
   },
   synapse: {
     filename: 'rw-synapse-trace.log',
     label: 'SYNAPSE',
     color: C.magenta,
-    description: 'Synapse-rules XML (constitution, bracket, rules)',
+    description: 'Synapse-rules XML — constitution, bracket, rules (legacy)',
   },
   intel: {
     filename: 'rw-intel-context-log.log',
     label: 'INTEL',
     color: C.blue,
-    description: 'Code-intel + Skill activations (agent prompts, entity refs)',
+    description: 'Code-intel + Skill activations (legacy)',
   },
   hooks: {
     filename: 'rw-hooks-log.log',
     label: 'HOOKS',
     color: C.yellow,
-    description: 'Metricas resumidas (session, rules count, bytes)',
+    description: 'Summary metrics — session, rules count, bytes (legacy)',
   },
 };
 
@@ -320,11 +328,11 @@ async function interactiveMenu(available) {
   console.log(`${cyan}${bold}  ║        by RIAWORKS                   ║${reset}`);
   console.log(`${cyan}${bold}  ╚══════════════════════════════════════╝${reset}`);
   console.log('');
-  console.log(`  ${dim}Use setas ↑↓ para navegar, Enter para selecionar, q para sair${reset}`);
+  console.log(`  ${dim}Use arrows ↑↓ to navigate, Enter to select, q to quit${reset}`);
 
   // ── Menu 1: Log source ──
   const logItems = [
-    { label: 'Todos os logs', value: null, desc: '(full + synapse + hooks)' },
+    { label: 'All logs', value: null, desc: '(unified + legacy)' },
   ];
   for (const [key, def] of Object.entries(available)) {
     const size = (fs.statSync(def.filePath).size / 1024).toFixed(1);
@@ -335,19 +343,19 @@ async function interactiveMenu(available) {
     });
   }
 
-  const logIdx = await showMenu('Qual log monitorar?', logItems);
+  const logIdx = await showMenu('Which log to monitor?', logItems);
   const logFilter = logItems[logIdx].value;
 
   // ── Menu 2: Time filter ──
   const sinceItems = [
-    { label: 'Apenas novas injecoes', value: null, desc: '(live mode — a partir de agora)' },
-    { label: 'Ultimos 5 minutos',     value: '5m' },
-    { label: 'Ultimos 15 minutos',    value: '15m' },
-    { label: 'Ultimos 30 minutos',    value: '30m' },
-    { label: 'Ultima hora',           value: '1h' },
+    { label: 'New events only', value: null, desc: '(live mode — from now)' },
+    { label: 'Last 5 minutes',     value: '5m' },
+    { label: 'Last 15 minutes',    value: '15m' },
+    { label: 'Last 30 minutes',    value: '30m' },
+    { label: 'Last hour',          value: '1h' },
   ];
 
-  const sinceIdx = await showMenu('Periodo de tempo?', sinceItems);
+  const sinceIdx = await showMenu('Time period?', sinceItems);
   const sinceStr = sinceItems[sinceIdx].value;
 
   return { logFilter, sinceStr };
@@ -365,7 +373,7 @@ function startWatcher(cwd, logsDir, available, logFilter, sinceStr) {
   let targets = available;
   if (logFilter) {
     if (!available[logFilter]) {
-      console.error(`Log "${logFilter}" nao encontrado. Disponiveis: ${Object.keys(available).join(', ')}`);
+      console.error(`Log "${logFilter}" not found. Available: ${Object.keys(available).join(', ')}`);
       process.exit(1);
     }
     targets = { [logFilter]: available[logFilter] };
@@ -380,12 +388,12 @@ function startWatcher(cwd, logsDir, available, logFilter, sinceStr) {
   console.log(`${cyan}${bold}  ║        by RIAWORKS                   ║${reset}`);
   console.log(`${cyan}${bold}  ╚══════════════════════════════════════╝${reset}`);
   console.log('');
-  console.log(`  ${dim}Projeto:${reset}   ${cwd}`);
+  console.log(`  ${dim}Project:${reset}   ${cwd}`);
   console.log(`  ${dim}Timezone:${reset}  ${getGMTLabel()}`);
   console.log(`  ${dim}Logs dir:${reset}  ${logsDir}`);
   console.log('');
 
-  console.log(`  ${dim}Monitorando:${reset}`);
+  console.log(`  ${dim}Monitoring:${reset}`);
   for (const [, def] of Object.entries(targets)) {
     const size = (fs.statSync(def.filePath).size / 1024).toFixed(1);
     console.log(`    ${def.color()}[${def.label}]${reset} ${def.filename} (${size} KB) — ${def.description}`);
@@ -393,13 +401,13 @@ function startWatcher(cwd, logsDir, available, logFilter, sinceStr) {
   console.log('');
 
   if (sinceMs > 0) {
-    console.log(`  ${dim}Filtro:${reset}    ultimos ${sinceStr}`);
+    console.log(`  ${dim}Filter:${reset}    last ${sinceStr}`);
   } else {
-    console.log(`  ${dim}Modo:${reset}      mostrando apenas novas injecoes a partir de agora`);
+    console.log(`  ${dim}Mode:${reset}      showing only new events from now`);
   }
 
   console.log('');
-  console.log(`  ${dim}Aguardando proximo prompt... (Ctrl+C para parar)${reset}`);
+  console.log(`  ${dim}Waiting for next prompt... (Ctrl+C to stop)${reset}`);
   console.log('');
   console.log(`${dim}${'─'.repeat(70)}${reset}`);
 
@@ -413,7 +421,7 @@ function startWatcher(cwd, logsDir, available, logFilter, sinceStr) {
   process.on('SIGINT', () => {
     for (const w of watchers) w.stop();
     console.log('');
-    console.log(`${dim}  Watcher encerrado.${reset}`);
+    console.log(`${dim}  Watcher stopped.${reset}`);
     process.exit(0);
   });
 
@@ -454,10 +462,10 @@ async function main() {
   const logsDir = path.join(cwd, '.logs');
 
   if (!fs.existsSync(logsDir)) {
-    console.error(`Diretorio .logs/ nao encontrado em: ${cwd}`);
+    console.error(`.logs/ directory not found in: ${cwd}`);
     console.error('');
-    console.error('Este projeto precisa ter os hooks AIOS/AIOX com logging ativo.');
-    console.error('Use o hook-fix-pack para instalar os hooks com hookLog().');
+    console.error('This project needs RIAWORKS wrapper hooks with logging enabled.');
+    console.error('Use prompt-apply-logging.md to install the logging plugin.');
     process.exit(1);
   }
 
@@ -471,8 +479,8 @@ async function main() {
   }
 
   if (Object.keys(available).length === 0) {
-    console.error('Nenhum log de hook encontrado em .logs/');
-    console.error('Esperados: rw-context-log-full.log, rw-synapse-trace.log, rw-hooks-log.log');
+    console.error('No hook log files found in .logs/');
+    console.error('Expected: rw-hooks.log (or legacy: rw-context-log-full.log, rw-synapse-trace.log, rw-hooks-log.log)');
     process.exit(1);
   }
 
@@ -494,35 +502,37 @@ function printHelp() {
   console.log('');
   console.log(`${bold}  Claude Context Watcher${reset} — by RIAWORKS`);
   console.log('');
-  console.log('  Monitora em tempo real o que os hooks AIOS/AIOX injetam no contexto');
-  console.log('  da sessao Claude Code. Le os logs de hook em .logs/');
+  console.log('  Real-time monitor for RIAWORKS hook log files. Shows what is being');
+  console.log('  injected into the Claude Code session context via hooks.');
   console.log('');
-  console.log(`  ${bold}IMPORTANTE:${reset} O JSONL do Claude NAO armazena as injecoes de contexto.`);
-  console.log('  Elas sao efemeras (existem apenas no request da API). A unica forma');
-  console.log('  de captura-las e via os logs de hook.');
+  console.log(`  ${bold}IMPORTANT:${reset} Claude's JSONL does NOT store context injections.`);
+  console.log('  They are ephemeral (exist only in the API request). The only way to');
+  console.log('  capture them is via hook logs.');
   console.log('');
-  console.log(`  ${bold}Uso:${reset}`);
-  console.log('    node watch-context.js                 # Menu interativo (setas + Enter)');
-  console.log('    node watch-context.js --log full      # Apenas context completo');
-  console.log('    node watch-context.js --log synapse   # Apenas synapse-rules');
-  console.log('    node watch-context.js --log hooks     # Apenas metricas resumidas');
-  console.log('    node watch-context.js --since 5m      # Ultimos 5 minutos');
-  console.log('    node watch-context.js --since 1h      # Ultima hora');
-  console.log('    node watch-context.js --cwd /path     # Outro projeto');
-  console.log('    node watch-context.js --no-color      # Sem cores ANSI');
+  console.log(`  ${bold}Usage:${reset}`);
+  console.log('    node rw-watch-context.js                  # Interactive menu');
+  console.log('    node rw-watch-context.js --log unified    # Unified log only (rw-hooks.log)');
+  console.log('    node rw-watch-context.js --log full       # Full context log (legacy)');
+  console.log('    node rw-watch-context.js --log synapse    # Synapse trace (legacy)');
+  console.log('    node rw-watch-context.js --log hooks      # Summary metrics (legacy)');
+  console.log('    node rw-watch-context.js --since 5m       # Last 5 minutes');
+  console.log('    node rw-watch-context.js --since 1h       # Last hour');
+  console.log('    node rw-watch-context.js --cwd /path      # Different project');
+  console.log('    node rw-watch-context.js --no-color       # No ANSI colors');
   console.log('');
-  console.log(`  ${bold}Menu interativo:${reset}`);
-  console.log('    Sem argumentos, abre um menu com setas para escolher:');
-  console.log('      1. Qual log monitorar (todos, context, synapse, hooks)');
-  console.log('      2. Periodo de tempo (live, 5m, 15m, 30m, 1h)');
+  console.log(`  ${bold}Interactive menu:${reset}`);
+  console.log('    Without arguments, opens an arrow-key menu to choose:');
+  console.log('      1. Which log to monitor (all, unified, context, synapse, hooks)');
+  console.log('      2. Time period (live, 5m, 15m, 30m, 1h)');
   console.log('');
-  console.log(`  ${bold}Logs monitorados:${reset}`);
-  console.log(`    ${C.cyan()}[CONTEXT]${reset}  rw-context-log-full.log  — Output completo do hook`);
-  console.log(`    ${C.magenta()}[SYNAPSE]${reset}  rw-synapse-trace.log    — Synapse-rules XML`);
-  console.log(`    ${C.yellow()}[HOOKS]${reset}    rw-hooks-log.log        — Metricas resumidas`);
+  console.log(`  ${bold}Monitored logs:${reset}`);
+  console.log(`    ${C.green()}[UNIFIED]${reset}  rw-hooks.log             — Unified RIAWORKS log (synapse + code-intel + skills)`);
+  console.log(`    ${C.cyan()}[CONTEXT]${reset}  rw-context-log-full.log  — Full hook output (legacy)`);
+  console.log(`    ${C.magenta()}[SYNAPSE]${reset}  rw-synapse-trace.log    — Synapse-rules XML (legacy)`);
+  console.log(`    ${C.yellow()}[HOOKS]${reset}    rw-hooks-log.log        — Summary metrics (legacy)`);
   console.log('');
-  console.log(`  ${bold}Dica:${reset} Abra num terminal separado enquanto usa o Claude Code.`);
-  console.log(`  ${dim}Cada prompt que voce envia dispara os hooks e gera novas entradas.${reset}`);
+  console.log(`  ${bold}Tip:${reset} Open in a separate terminal while using Claude Code.`);
+  console.log(`  ${dim}Each prompt you send triggers hooks and generates new log entries.${reset}`);
   console.log('');
 }
 

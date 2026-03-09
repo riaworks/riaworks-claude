@@ -1,71 +1,107 @@
-# RIAWORKS Claude Logs — Hooks
+# RIAWORKS Claude Logs — Hook Wrappers
 
-Hooks customizados do projeto RIAWORKS que estendem os hooks AIOX com logging e code intelligence.
+RIAWORKS wrapper hooks that replace the default AIOX hooks with unified logging.
 
 ## Ownership
 
-| Diretório | Dono | Modificável |
-|-----------|------|-------------|
-| `.claude/hooks/` | **AIOX** (original do framework) | NUNCA modificar |
-| `.riaworks-claude/claude-logs/hooks/` | **RIAWORKS** (projeto) | Livre |
+| Directory | Owner | Modifiable |
+|-----------|-------|------------|
+| `.claude/hooks/` | **AIOX** (framework original) | NEVER modify |
+| `.riaworks-claude/claude-logs/hooks/` | **RIAWORKS** (plugin) | Free |
 
-## Estrutura
+## Structure
 
 ```
-.riaworks-claude/claude-logs/
-├── hooks/
-│   ├── lib/
-│   │   ├── hook-logger.js          ← Logger unificado (zero deps AIOX)
-│   │   └── read-stdin.js           ← Leitor stdin (Windows-safe)
-│   ├── synapse-logged.cjs          ← Wrapper RIAWORKS do synapse-engine (adiciona logging)
-│   ├── code-intel-pretool.cjs      ← Hook code-intel (PreToolUse: Write|Edit|Skill)
-│   └── README.md                   ← Este arquivo
-├── watch-context.js                ← Monitor de logs em tempo real
-└── docs/
-    ├── hooks-guide.md              ← Guia completo do sistema de hooks
-    ├── ativar-log-aios.md          ← Prompt: ativar hookLog() no AIOX core
-    └── prompt-aplicar-log-system.md ← Prompt: aplicar no aiox-core-fork
+.riaworks-claude/claude-logs/hooks/
+├── rw-synapse-log.cjs         ← UserPromptSubmit wrapper (replaces synapse-engine.cjs)
+├── rw-pretool-log.cjs         ← PreToolUse wrapper (replaces code-intel-pretool.cjs)
+├── lib/
+│   ├── rw-hook-logger.js      ← Unified logger (zero AIOX dependencies)
+│   └── rw-read-stdin.js       ← Windows-safe stdin reader
+└── README.md                  ← This file
 ```
 
-## Como Funciona
+## How It Works
 
-### synapse-logged.cjs (UserPromptSubmit)
+### rw-synapse-log.cjs (UserPromptSubmit)
 
-Wrapper que:
-1. Lê stdin via `lib/read-stdin.js` (sanitização Windows)
-2. Delega ao AIOX `resolveHookRuntime()` + `SynapseEngine.process()`
-3. Loga via `lib/hook-logger.js` → `.logs/rw-hooks.log`
-4. Escreve output JSON no stdout para Claude Code
+Wrapper that:
+1. Reads stdin via `lib/rw-read-stdin.js` (Windows backslash sanitization)
+2. Delegates to AIOX `resolveHookRuntime()` + `SynapseEngine.process()`
+3. Logs via `lib/rw-hook-logger.js` → `.logs/rw-hooks.log`
+4. Writes JSON output to stdout for Claude Code
 
-**Original AIOX:** `.claude/hooks/synapse-engine.cjs` (não usado diretamente, mas preservado)
+**AIOX original:** `.claude/hooks/synapse-engine.cjs` (preserved, not used when plugin is active)
 
-### code-intel-pretool.cjs (PreToolUse)
+### rw-pretool-log.cjs (PreToolUse)
 
-Hook RIAWORKS (não existe no repo AIOX original) que:
-- **Write/Edit:** Consulta entity registry AIOX (`resolveCodeIntel`) e injeta `<code-intel-context>`
-- **Skill:** Apenas loga a ativação do agente (sem injection)
+Wrapper that:
+- **Write/Edit:** Queries AIOX entity registry (`resolveCodeIntel`) and injects `<code-intel-context>`
+- **Skill:** Logs agent activation only (no injection)
 
-### lib/hook-logger.js
+**AIOX original:** `.claude/hooks/code-intel-pretool.cjs` (preserved, not used when plugin is active)
 
-Logger unificado, zero dependências AIOX.
+### lib/rw-hook-logger.js
+
+Unified logger, zero AIOX dependencies.
 - Env var: `RW_HOOK_LOG` = `0` (off) | `1` (summary) | `2` (verbose + XML)
 - Output: `.logs/rw-hooks.log`
+- Functions: `logSynapse()`, `logEngineMetrics()`, `logCodeIntel()`, `logSkill()`, `logOp()`
 
-### lib/read-stdin.js
+### lib/rw-read-stdin.js
 
-Leitor stdin compartilhado com sanitização de backslashes para Windows.
+Shared stdin reader with Windows backslash sanitization (`sanitizeJsonString()` fallback).
 
-## Configuração
+## Configuration
 
-Registrado em `.claude/settings.local.json` (no projeto principal):
+Registered in `.claude/settings.local.json` (in the main project):
+
+### Activated (with logging):
 
 ```json
 {
-  "env": { "RW_HOOK_LOG": "2" },
   "hooks": {
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node .riaworks-claude/claude-logs/hooks/synapse-logged.cjs" }] }],
-    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "node .riaworks-claude/claude-logs/hooks/code-intel-pretool.cjs" }], "matcher": "Write|Edit|Skill" }],
-    "PreCompact": [{ "hooks": [{ "type": "command", "command": "node .claude/hooks/precompact-wrapper.cjs" }] }]
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
+      }]
+    }],
+    "PreToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
+      }],
+      "matcher": "Write|Edit|Skill"
+    }],
+    "PreCompact": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node .claude/hooks/precompact-session-digest.cjs"
+      }]
+    }]
+  }
+}
+```
+
+### Deactivated (revert to AIOX originals):
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node .claude/hooks/synapse-engine.cjs"
+      }]
+    }],
+    "PreToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node .claude/hooks/code-intel-pretool.cjs"
+      }],
+      "matcher": "Write|Edit"
+    }]
   }
 }
 ```
@@ -73,13 +109,13 @@ Registrado em `.claude/settings.local.json` (no projeto principal):
 ## Watch Logs
 
 ```bash
-# Via watch-context.js (recomendado)
-node .riaworks-claude/claude-logs/watch-context.js
+# Via rw-watch-context.js
+node .riaworks-claude/claude-logs/rw-watch-context.js
 
-# Ou diretamente
+# Or directly
 tail -f .logs/rw-hooks.log
 ```
 
-## Documentação Completa
+## Full Documentation
 
-Ver `claude-logs/docs/hooks-guide.md`.
+See `claude-logs/docs/manual.md`.

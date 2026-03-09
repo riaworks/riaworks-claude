@@ -9,7 +9,7 @@
  * Replaces: RW_HOOKS_LOG, RW_SYNAPSE_TRACE, RW_CONTEXT_LOG_FULL, RW_INTEL_CONTEXT_LOG
  * Note: AIOX core still writes to .logs/rw-hooks-log.log via its own rwHooksLog.
  *
- * @module hooks/lib/hook-logger
+ * @module riaworks/lib/rw-hook-logger
  */
 
 const fs = require('fs');

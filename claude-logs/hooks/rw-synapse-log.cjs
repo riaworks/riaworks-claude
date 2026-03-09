@@ -16,15 +16,15 @@
  * Logging: RW_HOOK_LOG=1 (summary) or RW_HOOK_LOG=2 (verbose with XML)
  * Output:  .logs/rw-hooks.log (unified)
  *
- * @module riaworks/synapse-logged
+ * @module riaworks/rw-synapse-log
  * @see .claude/hooks/synapse-engine.cjs (AIOX original)
  */
 
 const path = require('path');
 
 // ── RIAWORKS lib (zero AIOX dependency) ─────────────────
-const { readStdin } = require('./lib/read-stdin');
-const logger = require('./lib/hook-logger');
+const { readStdin } = require('./lib/rw-read-stdin');
+const logger = require('./lib/rw-hook-logger');
 
 // ── AIOX core paths (resolved from project root) ────────
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -92,7 +92,7 @@ function run() {
       try {
         const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
         logger.init(cwd);
-        logger.logOp('ERROR', `synapse-logged crashed: ${err.message}`);
+        logger.logOp('ERROR', `rw-synapse-log crashed: ${err.message}`);
       } catch (_) {}
     });
 }

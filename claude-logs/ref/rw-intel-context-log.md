@@ -1,21 +1,21 @@
-# rwIntelContextLog — Code-Intel Injection Log
+# rw-intel-context-log — Code-Intel Injection Log
 
-**Function:** `rwIntelContextLog(cwd, { toolName, filePath, xml })`
-**Env var:** `RW_INTEL_CONTEXT_LOG=1`
-**Log file:** `.logs/rw-intel-context-log.log`
-**Defined in:** `.claude/hooks/code-intel-pretool.cjs`
+**Logger function:** `logCodeIntel()`
+**Env var:** `RW_HOOK_LOG=1` (summary) or `RW_HOOK_LOG=2` (verbose with XML)
+**Log file:** `.logs/rw-hooks.log`
+**Defined in:** `.riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs` (calls `lib/rw-hook-logger.js`)
 
 ---
 
 ## What It Is
 
-Log that records the **`<code-intel-context>` XML injected** by the code-intel hook on each Write or Edit operation, and also **agent prompts** loaded via Skill activation. Answers the question: "what code context was injected when the agent edited this file?" and "what agent prompt was loaded?"
+Log that records the **`<code-intel-context>` XML injected** by the code-intel hook on each Write or Edit operation. Answers the question: "what code context was injected when the agent edited this file?"
 
-Does not record Synapse rules (for that use `rwSynapseTrace`). Does not record the operational log (for that use `rwHooksLog`).
+Does not record Synapse rules (for that see `rw-synapse-trace.md`).
 
 ## Why It Exists
 
-The `code-intel-pretool.cjs` hook injects invisible context about entities, references, and dependencies of the file being edited. Without a log, it is impossible to know:
+The `rw-pretool-log.cjs` hook injects invisible context about entities, references, and dependencies of the file being edited. Without a log, it is impossible to know:
 
 - Whether code-intel found data for the file
 - Which entities, references, and dependencies were injected
@@ -26,71 +26,82 @@ The `code-intel-pretool.cjs` hook injects invisible context about entities, refe
 
 On **Write**, **Edit**, and **Skill** operations in Claude Code. Does not fire on Read, Bash, Grep, etc.
 
-- **Write/Edit:** Logs the `<code-intel-context>` XML injected via `rwIntelContextLog()`
-- **Skill:** Logs the full agent prompt loaded via `rwSkillLog()` (e.g., `/AIOX:agents:pm` logs the content of `.aiox-core/development/agents/pm.md`)
+- **Write/Edit:** Logs the `<code-intel-context>` XML injected via `logCodeIntel()`
+- **Skill:** Logs the agent activation via `logSkill()` (see `rw-skill-log.md`)
 
 ## How to Activate
 
-Add `RW_INTEL_CONTEXT_LOG=1` to the hook command in `.claude/settings.local.json`:
+Set `RW_HOOK_LOG=1` on the PreToolUse hook command in `.claude/settings.local.json`:
 
 ```json
 "PreToolUse": [{
   "hooks": [{
     "type": "command",
-    "command": "RW_INTEL_CONTEXT_LOG=1 node .claude/hooks/code-intel-pretool.cjs"
+    "command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
   }],
   "matcher": "Write|Edit|Skill"
 }]
 ```
 
+For verbose (includes full code-intel XML):
+```json
+"command": "RW_HOOK_LOG=2 node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
+```
+
 ## How to Deactivate
 
-Remove `RW_INTEL_CONTEXT_LOG=1` from the command:
+Remove `RW_HOOK_LOG=1` from the command:
 
 ```json
-"command": "node .claude/hooks/code-intel-pretool.cjs"
+"command": "node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
 ```
 
 ## How to View
 
 ```bash
-# Full log
-cat .logs/rw-intel-context-log.log
+# Full log (all events)
+cat .logs/rw-hooks.log
 
-# Real time
-tail -f .logs/rw-intel-context-log.log
+# Code-intel entries only
+grep -A 5 "CODE-INTEL" .logs/rw-hooks.log
 
 # Edited files only
-grep "TOOL:" .logs/rw-intel-context-log.log
-
-# Found entities only
-grep -A 3 "existing-entity" .logs/rw-intel-context-log.log
+grep "tool:" .logs/rw-hooks.log
 ```
 
 ## Log Format
 
+**Level 1 (summary):**
 ```
-================================================================================
-[2026-03-06T17:10:45.123Z] CODE-INTEL INJECTION -- PreToolUse
-================================================================================
-TOOL: Edit -> .claude/hooks/synapse-engine.cjs
+--- CODE-INTEL ------------------------------------- 17:10:45 ---
+  tool:   Edit -> .claude/hooks/synapse-engine.cjs
+  entity: .claude/hooks/synapse-engine.cjs
+  refs: 2 | deps: 1 (hook-runtime@core)
+```
 
-<code-intel-context>
-  <target-file>.claude/hooks/synapse-engine.cjs</target-file>
-  <existing-entity>
-    <path>.claude/hooks/synapse-engine.cjs</path>
-    <purpose>SYNAPSE Hook Entry Point</purpose>
-  </existing-entity>
-  <referenced-by count="2">
-    <ref file=".claude/settings.local.json" context="Registered as UserPromptSubmit hook" />
-    <ref file="aios-aiox-riaworks/rw-synapse-trace.md" context="Documentation" />
-  </referenced-by>
-</code-intel-context>
+**Level 2 (verbose — adds XML):**
+```
+--- CODE-INTEL ------------------------------------- 17:10:45 ---
+  tool:   Edit -> .claude/hooks/synapse-engine.cjs
+  entity: .claude/hooks/synapse-engine.cjs
+  refs: 2 | deps: 1 (hook-runtime@core)
+  --- injected xml ---
+  <code-intel-context>
+    <target-file>.claude/hooks/synapse-engine.cjs</target-file>
+    <existing-entity>
+      <path>.claude/hooks/synapse-engine.cjs</path>
+      <purpose>SYNAPSE Hook Entry Point</purpose>
+    </existing-entity>
+    <referenced-by count="2">
+      <ref file=".claude/settings.local.json" context="Registered as UserPromptSubmit hook" />
+    </referenced-by>
+  </code-intel-context>
+  --- end xml ---
 ```
 
 ## Behavior
 
-- **Opt-in:** only writes when `RW_INTEL_CONTEXT_LOG=1`
+- **Opt-in:** only writes when `RW_HOOK_LOG` is set to `1` or `2`
 - **Fire-and-forget:** never blocks hook execution
 - **Auto-create:** creates `.logs/` with `.gitignore` if it does not exist
 - **Append-only:** never overwrites, always appends
@@ -98,13 +109,14 @@ TOOL: Edit -> .claude/hooks/synapse-engine.cjs
 
 ## Relationship with Other Logs
 
-| Log | What it captures | Event |
-|-----|------------------|-------|
-| `rw-hooks-log` | Operational status of hooks | UserPromptSubmit |
-| `rw-synapse-trace` | Injected Synapse XML | UserPromptSubmit |
-| **`rw-intel-context-log`** | **Code-intel XML + agent prompts** | **PreToolUse (Write/Edit/Skill)** |
-| `rw-context-log-full` | Everything unified | Both |
+| Log | What it captures | Hook |
+|-----|------------------|------|
+| `rw-hooks-log` | Synapse operational status + engine metrics | UserPromptSubmit |
+| `rw-synapse-trace` | Full injected Synapse XML (level 2) | UserPromptSubmit |
+| **`rw-intel-context-log`** | **Code-intel XML + skill activations** | **PreToolUse** |
+
+All events write to the same unified `.logs/rw-hooks.log` file.
 
 ---
 
-*RIAWORKS — 2026-03-06*
+*RIAWORKS — 2026-03-08*

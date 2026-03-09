@@ -1,6 +1,6 @@
 # RIAWORKS Claude Logs — Manual
 
-Logging system for [Synkra AIOX](https://github.com/SynkraAI/aiox-core) Claude Code hooks. Provides 4 log levels to diagnose and trace context injection.
+Logging plugin for [Synkra AIOX](https://github.com/SynkraAI/aiox-core) Claude Code hooks. Provides unified logging via wrapper hooks that replace the AIOX originals.
 
 **[Leia em Portugues](manual-pt-BR.md)**
 
@@ -8,10 +8,10 @@ Logging system for [Synkra AIOX](https://github.com/SynkraAI/aiox-core) Claude C
 
 Claude Code injects invisible context into every prompt via hooks. Without logging, it's impossible to know what rules were injected, if the hook failed, or what code-intel data the agent received.
 
-This package provides:
-- **4 logging functions** (`rw-*`) with independent env var control
-- **RIAWORKS hook wrappers** (optional, for projects using the riaworks-claude hooks)
-- **Real-time log monitor** (`watch-context.js`)
+This plugin provides:
+- **Wrapper hooks** that replace AIOX originals and add logging
+- **Unified log file** (`.logs/rw-hooks.log`) with 2 verbosity levels
+- **Real-time log monitor** (`rw-watch-context.js`)
 
 > **Prerequisites:** The structural fixes from **aiox-fixes** should be applied first.
 
@@ -19,150 +19,163 @@ This package provides:
 
 ```
 claude-logs/
-├── prompt-apply-logging.md           # Self-service prompt (English)
-├── watch-context.js                  # Real-time log monitor
-├── hooks/                            # RIAWORKS hook wrappers (optional)
-│   ├── synapse-logged.cjs            # UserPromptSubmit with logging
-│   ├── code-intel-pretool.cjs        # PreToolUse with logging
+├── prompt-apply-logging.md           # Self-service installer prompt (English)
+├── rw-watch-context.js               # Real-time log monitor
+├── hooks/                            # RIAWORKS wrapper hooks (plugin)
+│   ├── rw-synapse-log.cjs           # UserPromptSubmit wrapper
+│   ├── rw-pretool-log.cjs           # PreToolUse wrapper
 │   ├── lib/
-│   │   ├── hook-logger.js            # Unified logger library
-│   │   └── read-stdin.js             # Windows-safe stdin reader
-│   └── README.md                     # Hooks documentation
+│   │   ├── rw-hook-logger.js        # Unified logger library
+│   │   └── rw-read-stdin.js         # Windows-safe stdin reader
+│   └── README.md                    # Hooks documentation
 ├── ref/                              # Reference files (read by prompt)
-│   ├── rw-hooks-log.md               # rwHooksLog() specification
-│   ├── rw-synapse-trace.md           # rwSynapseTrace() specification
-│   ├── rw-intel-context-log.md       # rwIntelContextLog() specification
-│   ├── rw-context-log-full.md        # rwContextLogFull() specification
-│   └── rw-skill-log.md              # rwSkillLog() specification
+│   ├── rw-hooks-log.md              # Operational log specification
+│   ├── rw-synapse-trace.md          # SYNAPSE XML trace specification
+│   ├── rw-intel-context-log.md      # Code-intel injection specification
+│   ├── rw-context-log-full.md       # Unified full log specification
+│   └── rw-skill-log.md             # Skill/agent activation specification
 └── docs/                             # Documentation
     ├── manual.md                     # This file
-    └── manual-pt-BR.md              # Portuguese version
+    └── manual-pt-BR.md             # Portuguese version
 ```
+
+## Architecture
+
+The plugin uses **wrapper hooks** that delegate to AIOX core functions and add logging. The original AIOX hooks are preserved untouched.
+
+```
+settings.local.json
+  └── UserPromptSubmit → rw-synapse-log.cjs (wrapper)
+        ├── reads stdin via lib/rw-read-stdin.js
+        ├── delegates to AIOX resolveHookRuntime + SynapseEngine
+        ├── logs via lib/rw-hook-logger.js → .logs/rw-hooks.log
+        └── writes JSON output to stdout
+  └── PreToolUse → rw-pretool-log.cjs (wrapper)
+        ├── Write/Edit: delegates to AIOX resolveCodeIntel + logs
+        └── Skill: logs agent activation (no injection)
+```
+
+**Important:** The wrapper hooks and the AIOX original hooks are mutually exclusive. Only ONE should be configured in `settings.local.json` at a time. Running both would cause duplicate context injection.
 
 ## Logging Reference
 
-All RIAWORKS logging extensions use the `rw-` prefix. There are **4 logs**: 3 individual + 1 unified.
+### Single Env Var
 
-### Quick Reference
+| Value | Level | What gets logged | Weight |
+|-------|-------|-----------------|--------|
+| (unset) | Off | Nothing | 0 |
+| `RW_HOOK_LOG=1` | Summary | Prompt, session, bracket, rules, metrics, code-intel summary, skills | ~200B/prompt |
+| `RW_HOOK_LOG=2` | Verbose | Everything above + full XML blocks | ~4-5KB/prompt |
 
-| # | Log | Env Var | Log File | Hook | Weight |
-|---|-----|---------|----------|------|--------|
-| 1 | **rw-hooks-log** | `RW_HOOKS_LOG=1` | `.logs/rw-hooks-log.log` | UserPromptSubmit | Light (~100B/prompt) |
-| 2 | **rw-synapse-trace** | `RW_SYNAPSE_TRACE=1` | `.logs/rw-synapse-trace.log` | UserPromptSubmit | Heavy (~4KB/prompt) |
-| 3 | **rw-intel-context-log** | `RW_INTEL_CONTEXT_LOG=1` | `.logs/rw-intel-context-log.log` | PreToolUse (Write/Edit/Skill) | Conditional |
-| 4 | **rw-context-log-full** | `RW_CONTEXT_LOG_FULL=1` | `.logs/rw-context-log-full.log` | Both | Heavy (~5-10KB/prompt) |
+### Log Events
 
-### 1. rw-hooks-log — Operational Status
+| Event | Hook | What it captures |
+|-------|------|------------------|
+| **SYNAPSE** | UserPromptSubmit | Prompt, session, bracket, rule count, static context, engine metrics |
+| **CODE-INTEL** | PreToolUse (Write/Edit) | Tool name, file path, entity, refs, deps |
+| **SKILL** | PreToolUse (Skill) | Skill name, resolved file path, file size |
 
-Answers: "is the hook working or failing?"
+All events write to the same unified `.logs/rw-hooks.log` file.
 
-Records hook lifecycle events: session created, runtime resolved, errors. Does **not** record content (prompts, XML). First line of diagnosis.
+Full specifications: [`ref/rw-hooks-log.md`](../ref/rw-hooks-log.md), [`ref/rw-synapse-trace.md`](../ref/rw-synapse-trace.md), [`ref/rw-intel-context-log.md`](../ref/rw-intel-context-log.md), [`ref/rw-context-log-full.md`](../ref/rw-context-log-full.md), [`ref/rw-skill-log.md`](../ref/rw-skill-log.md)
 
-Full specification: [`rw-hooks-log.md`](../ref/rw-hooks-log.md)
+## Activate / Deactivate
 
-### 2. rw-synapse-trace — SYNAPSE XML Trace
+### Activate (install plugin)
 
-Answers: "what rules exactly were injected?"
+Update `.claude/settings.local.json` to point to wrapper hooks:
 
-Records the full SYNAPSE XML injected as `additionalContext` on every prompt. Use when you need to see the exact rules Claude received.
-
-Full specification: [`rw-synapse-trace.md`](../ref/rw-synapse-trace.md)
-
-### 3. rw-intel-context-log — Code-Intel Injection
-
-Answers: "what code context was injected when the agent edited this file?"
-
-Records `<code-intel-context>` XML on Write/Edit operations and agent prompts loaded via Skill activation.
-
-Full specification: [`rw-intel-context-log.md`](../ref/rw-intel-context-log.md)
-
-### 4. rw-context-log-full — Unified Full Log
-
-Answers: "what is the complete context Claude is receiving?"
-
-Captures everything in a single chronological log: user prompt, session, SYNAPSE XML, static context listing, code-intel XML, and agent prompts.
-
-Full specification: [`rw-context-log-full.md`](../ref/rw-context-log-full.md)
-
-### Individual vs Full
-
-| Individual Log | Included in Full? | Can be used alone? |
-|----------------|--------------------|--------------------|
-| `RW_HOOKS_LOG` | Yes | Yes |
-| `RW_SYNAPSE_TRACE` | Yes | Yes |
-| `RW_INTEL_CONTEXT_LOG` | Yes | Yes |
-| `RW_CONTEXT_LOG_FULL` | N/A — is the unified master | Yes |
-
-**Full replaces all 3 individuals.** When `RW_CONTEXT_LOG_FULL=1` is active, you do not need the individual env vars.
-
-### Recommended Combinations
-
-| Scenario | Configuration |
-|----------|---------------|
-| Quick health check | `RW_HOOKS_LOG=1` only |
-| Debug missing rules | `RW_HOOKS_LOG=1 RW_SYNAPSE_TRACE=1` |
-| Debug code-intel only | `RW_INTEL_CONTEXT_LOG=1` on PreToolUse |
-| Full diagnostic session | `RW_CONTEXT_LOG_FULL=1` on both hooks |
-
-## Activation
-
-Logging variables are set as **inline env vars** in the hook command inside `.claude/settings.local.json`. They are NOT activated via `export`.
-
-### Where to Configure
-
-| Hook Event | Script | Accepts |
-|------------|--------|---------|
-| `UserPromptSubmit` | `synapse-engine.cjs` | `RW_HOOKS_LOG`, `RW_SYNAPSE_TRACE`, `RW_CONTEXT_LOG_FULL` |
-| `PreToolUse` (Write\|Edit\|Skill) | `code-intel-pretool.cjs` | `RW_INTEL_CONTEXT_LOG`, `RW_CONTEXT_LOG_FULL` |
-
-### Examples
-
-**Default (all logging disabled):**
 ```json
-"command": "node .claude/hooks/synapse-engine.cjs"
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
+      }]
+    }],
+    "PreToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
+      }],
+      "matcher": "Write|Edit|Skill"
+    }],
+    "PreCompact": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node .claude/hooks/precompact-session-digest.cjs"
+      }]
+    }]
+  }
+}
 ```
 
-**Hook log only (lightweight, recommended):**
+Or use the installer prompt: copy `prompt-apply-logging.md` and paste into Claude Code.
+
+### Deactivate (revert to AIOX originals)
+
+Change `.claude/settings.local.json` back to the AIOX original hooks:
+
 ```json
-"command": "RW_HOOKS_LOG=1 node .claude/hooks/synapse-engine.cjs"
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node .claude/hooks/synapse-engine.cjs"
+      }]
+    }],
+    "PreToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node .claude/hooks/code-intel-pretool.cjs"
+      }],
+      "matcher": "Write|Edit"
+    }],
+    "PreCompact": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node .claude/hooks/precompact-session-digest.cjs"
+      }]
+    }]
+  }
+}
 ```
 
-**Full unified (both hooks):**
+### Disable logging only (keep wrappers)
+
+Remove `RW_HOOK_LOG=1` from the commands:
+
 ```json
-"command": "RW_CONTEXT_LOG_FULL=1 node .claude/hooks/synapse-engine.cjs"
-"command": "RW_CONTEXT_LOG_FULL=1 node .claude/hooks/code-intel-pretool.cjs"
+"command": "node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
+"command": "node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
 ```
 
 ### Behavior (all logs)
 
-- **Opt-in:** Only writes when the env var is set to `1`
+- **Opt-in:** Only writes when `RW_HOOK_LOG` is set to `1` or `2`
 - **Fire-and-forget:** Never blocks hook execution
-- **Auto-create:** Creates `.logs/` with `.gitignore` if it doesn't exist
+- **Auto-create:** Creates `.logs/` with `.gitignore` if it does not exist
 - **Append-only:** Never overwrites, always appends
-
-## How to Apply
-
-1. Apply structural fixes first (see **aiox-fixes** package)
-2. Copy the content of `prompt-apply-logging.md` and paste into Claude Code
-3. Claude will read all log docs, verify prerequisites, apply logging, and validate
 
 ## Real-Time Monitor
 
 ```bash
-node .riaworks-claude/claude-logs/watch-context.js
+node .riaworks-claude/claude-logs/rw-watch-context.js
 ```
 
 Watches `.logs/rw-hooks.log` in real-time (similar to `tail -f`).
 
 ## Naming Convention
 
-| Function | Env Var | Log File |
-|----------|---------|----------|
-| `rwHooksLog()` | `RW_HOOKS_LOG=1` | `.logs/rw-hooks-log.log` |
-| `rwSynapseTrace()` | `RW_SYNAPSE_TRACE=1` | `.logs/rw-synapse-trace.log` |
-| `rwIntelContextLog()` | `RW_INTEL_CONTEXT_LOG=1` | `.logs/rw-intel-context-log.log` |
-| `rwSkillLog()` | `RW_INTEL_CONTEXT_LOG=1` or `RW_CONTEXT_LOG_FULL=1` | `.logs/rw-intel-context-log.log` + `.logs/rw-context-log-full.log` |
-| `rwContextLogFull()` | `RW_CONTEXT_LOG_FULL=1` | `.logs/rw-context-log-full.log` |
+| File | Purpose |
+|------|---------|
+| `rw-synapse-log.cjs` | UserPromptSubmit wrapper hook |
+| `rw-pretool-log.cjs` | PreToolUse wrapper hook |
+| `lib/rw-hook-logger.js` | Unified logger library |
+| `lib/rw-read-stdin.js` | Windows-safe stdin reader |
+| `rw-watch-context.js` | Real-time log monitor |
 
 ## Related Packages
 

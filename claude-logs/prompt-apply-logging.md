@@ -1,4 +1,4 @@
-# Prompt: Apply RIAWORKS Logging System
+# Prompt: Install RIAWORKS Logging Plugin
 
 Copy the prompt below and paste it into Claude Code at the project root.
 
@@ -6,105 +6,63 @@ Copy the prompt below and paste it into Claude Code at the project root.
 
 ---
 
-## Self-Service Apply Prompt
+## Self-Service Install Prompt
 
 ````
-I need you to apply the RIAWORKS logging extensions to this AIOX project. Apply ONLY the logging system — the structural fixes should already be in place.
+I need you to install the RIAWORKS logging plugin for this AIOX project. This plugin replaces the default AIOX hooks with RIAWORKS wrapper hooks that add unified logging.
 
-## STEP 0 — VERIFY DOCUMENTATION
+IMPORTANT: This prompt ONLY changes `.claude/settings.local.json` to point to wrapper hooks. It does NOT modify any AIOX source files.
 
-Check if the folder `.riaworks-claude/claude-logs/ref/` exists at the project root (same level as `.aiox-core/`).
+## STEP 0 — VERIFY PLUGIN FILES EXIST
 
-If it does NOT exist, ask me:
-"The riaworks-claude submodule is not present. Can I clone it from
+Check if the wrapper hooks exist at `.riaworks-claude/claude-logs/hooks/`:
+
+1. `.riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs` — UserPromptSubmit wrapper
+2. `.riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs` — PreToolUse wrapper
+3. `.riaworks-claude/claude-logs/hooks/lib/rw-hook-logger.js` — Unified logger
+4. `.riaworks-claude/claude-logs/hooks/lib/rw-read-stdin.js` — Windows-safe stdin reader
+
+If any file is missing, stop and tell me:
+"The riaworks-claude submodule is not present or incomplete. Can I clone it from
 https://github.com/riaworks/riaworks-claude.git into .riaworks-claude/ ?"
 
-Wait for my confirmation before cloning. If it already exists, continue.
+Wait for my confirmation before cloning. If all files exist, continue.
 
-## STEP 1 — READ ALL LOG DOCUMENTATION
+## STEP 1 — READ PLUGIN DOCUMENTATION
 
-Read these files from `.riaworks-claude/claude-logs/ref/`. They contain all logging function
-definitions, code snippets, and behavior. Do NOT guess — use the exact code from these files:
+Read these reference files to understand what the plugin does:
 
-1. `.riaworks-claude/claude-logs/ref/rw-hooks-log.md` — rwHooksLog() function and usage
-2. `.riaworks-claude/claude-logs/ref/rw-synapse-trace.md` — rwSynapseTrace() function and usage
-3. `.riaworks-claude/claude-logs/ref/rw-intel-context-log.md` — rwIntelContextLog() function and usage
-4. `.riaworks-claude/claude-logs/ref/rw-context-log-full.md` — rwContextLogFull() unified log
-5. `.riaworks-claude/claude-logs/ref/rw-skill-log.md` — Skill/agent activation logging
+1. `.riaworks-claude/claude-logs/ref/rw-hooks-log.md` — Operational log spec
+2. `.riaworks-claude/claude-logs/ref/rw-synapse-trace.md` — SYNAPSE trace spec
+3. `.riaworks-claude/claude-logs/ref/rw-intel-context-log.md` — Code-intel log spec
+4. `.riaworks-claude/claude-logs/ref/rw-context-log-full.md` — Unified log spec
+5. `.riaworks-claude/claude-logs/ref/rw-skill-log.md` — Skill activation log spec
 
-After reading, report a summary of what you found.
+After reading, report a summary of what the plugin provides.
 
-## STEP 2 — INTEGRITY CHECK (read-only, do NOT edit yet)
+## STEP 2 — CHECK CURRENT CONFIGURATION
 
-Verify these prerequisite conditions (fixes must already be applied):
+Read `.claude/settings.local.json` and report:
 
-1. `.claude/hooks/synapse-engine.cjs` — must exist, must NOT have process.exit() (Fix #3)
-2. `.aiox-core/core/synapse/runtime/hook-runtime.js` — must exist, must have hookEventName in buildHookOutput() (Fix #2)
-3. `.claude/hooks/code-intel-pretool.cjs` — must exist, must NOT have process.exit() (Fix #8)
-4. `.claude/settings.local.json` — must have UserPromptSubmit and PreToolUse hooks registered
+1. Current UserPromptSubmit hook command (which script is configured?)
+2. Current PreToolUse hook command (which script is configured?)
+3. Current PreCompact hook command (if any)
+4. Whether RIAWORKS wrappers are already installed
 
-For each file, report:
-- EXISTS: yes/no
-- FIXES APPLIED: yes/no (verify Fix #2, #3, #8 are in place)
-- LOGGING ALREADY PRESENT: yes/no (check for rwHooksLog, rwSynapseTrace, etc.)
+If RIAWORKS wrappers are already installed, report "already installed" and stop.
 
-If fixes are NOT applied, stop and tell me to run the aiox-fixes prompt first.
-Do NOT proceed to Step 3 until you report findings and I confirm.
+## STEP 3 — INSTALL PLUGIN
 
-## STEP 3 — APPLY LOGGING FUNCTIONS
+Update `.claude/settings.local.json` to replace AIOX hooks with RIAWORKS wrappers.
 
-Apply each logging function as described in the documentation files from Step 1.
-Use the exact code from the documentation — do NOT invent or modify.
-
-Order of application:
-
-1. **rwHooksLog()** — Add to `.aiox-core/core/synapse/runtime/hook-runtime.js`
-   - Add function definition (from rw-hooks-log.md)
-   - Add log calls inside resolveHookRuntime()
-   - Add to module.exports
-
-2. **rwSynapseTrace()** — Add to `.claude/hooks/synapse-engine.cjs`
-   - Add function definition (from rw-synapse-trace.md)
-   - Add trace call before stdout.write
-
-3. **rwContextLogFull()** — Add to BOTH hooks
-   - Add to `synapse-engine.cjs` (from rw-context-log-full.md)
-   - Add to `code-intel-pretool.cjs` (from rw-context-log-full.md)
-
-4. **rwIntelContextLog()** — Add to `.claude/hooks/code-intel-pretool.cjs`
-   - Add function definition (from rw-intel-context-log.md)
-   - Add log call for Write/Edit operations
-
-5. **rwSkillLog()** — Add to `.claude/hooks/code-intel-pretool.cjs`
-   - Add function definition (from 04-fix-skill-logging.md)
-   - Add Skill handling in main()
-   - Add to module.exports
-
-6. **Skill matcher** — Update `.claude/settings.local.json`
-   - Change PreToolUse matcher from `Write|Edit` to `Write|Edit|Skill`
-
-For each function:
-- If ALREADY PRESENT, skip and report "already applied"
-- If target file MISSING, report and ask before proceeding
-
-## STEP 4 — CONFIGURE ACTIVATION
-
-Create `.logs/` directory with `.gitignore` containing:
-```
-*
-!.gitignore
-```
-
-Update `.claude/settings.local.json` hook commands to enable logging.
-Default recommended configuration (lightweight):
-
+**Before (AIOX original):**
 ```json
 {
   "hooks": {
     "UserPromptSubmit": [{
       "hooks": [{
         "type": "command",
-        "command": "RW_HOOKS_LOG=1 node .claude/hooks/synapse-engine.cjs"
+        "command": "node .claude/hooks/synapse-engine.cjs"
       }]
     }],
     "PreToolUse": [{
@@ -112,13 +70,63 @@ Default recommended configuration (lightweight):
         "type": "command",
         "command": "node .claude/hooks/code-intel-pretool.cjs"
       }],
-      "matcher": "Write|Edit|Skill"
+      "matcher": "Write|Edit"
     }]
   }
 }
 ```
 
-Show me the configured commands before applying. I will choose the logging level.
+**After (RIAWORKS wrapper with logging disabled by default):**
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
+      }]
+    }],
+    "PreToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
+      }],
+      "matcher": "Write|Edit|Skill"
+    }],
+    "PreCompact": [{
+      "hooks": [{
+        "type": "command",
+        "command": "node .claude/hooks/precompact-session-digest.cjs"
+      }]
+    }]
+  }
+}
+```
+
+Key changes:
+- UserPromptSubmit: `.claude/hooks/synapse-engine.cjs` → `.riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs`
+- PreToolUse: `.claude/hooks/code-intel-pretool.cjs` → `.riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs`
+- PreToolUse matcher: `Write|Edit` → `Write|Edit|Skill` (adds Skill logging)
+- PreCompact: kept as-is (not wrapped)
+- No timeout set (Claude Code default is sufficient)
+
+Show me the final configuration before applying. I will confirm.
+
+## STEP 4 — ENABLE LOGGING (optional)
+
+Ask me which logging level I want:
+
+| Level | Command prefix | Log weight |
+|-------|---------------|------------|
+| Off (default) | (none) | None |
+| Summary | `RW_HOOK_LOG=1` | ~200B/prompt |
+| Verbose (with XML) | `RW_HOOK_LOG=2` | ~4KB/prompt |
+
+If I choose a level, add the env var prefix to BOTH hook commands:
+```json
+"command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
+"command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-pretool-log.cjs"
+```
 
 ## STEP 5 — VALIDATION
 
@@ -126,36 +134,32 @@ Run the verification command and report the result:
 
 ```bash
 echo '{"prompt":"test","session_id":"verify-log","cwd":"'$(pwd)'"}' \
-  | RW_HOOKS_LOG=1 node .claude/hooks/synapse-engine.cjs 2>/dev/null \
-  && cat .logs/rw-hooks-log.log
+  | RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs 2>/dev/null \
+  && echo "Hook executed successfully"
 ```
 
-Expected: lines with timestamps showing session created, runtime resolved.
+If `.logs/rw-hooks.log` was created, report its contents.
 
 ## RULES
-- Do NOT skip Step 1. Reading the documentation is mandatory.
-- Do NOT skip Step 2. Integrity check is mandatory.
-- ALL code comes from the documentation files — never invent code.
-- Do NOT modify any existing fix code — this prompt applies ONLY logging extensions.
-- All logging is fire-and-forget — NEVER blocks hook execution.
-- All logging is opt-in via inline env vars — disabled by default.
-- If a target file does not exist or structure changed, ask before proceeding.
+- Do NOT modify any AIOX source files — this is an install, not a patch
+- ONLY change `.claude/settings.local.json`
+- Preserve any other existing settings (env, permissions, etc.)
+- The original AIOX hooks remain untouched at `.claude/hooks/`
+- To uninstall, revert settings.local.json to point back to `.claude/hooks/`
 ````
 
 ---
 
-## Quick Reference: Logging Levels
+## Uninstall
 
-After installation, control logging via inline env vars in `.claude/settings.local.json`:
+To revert to the original AIOX hooks, change `.claude/settings.local.json` back to:
 
-| Level | Configuration | Weight |
-|-------|---------------|--------|
-| Off (default) | `node .claude/hooks/synapse-engine.cjs` | None |
-| Operational only | `RW_HOOKS_LOG=1 node .claude/hooks/synapse-engine.cjs` | ~100B/prompt |
-| + SYNAPSE trace | `RW_HOOKS_LOG=1 RW_SYNAPSE_TRACE=1 node .claude/hooks/synapse-engine.cjs` | ~4KB/prompt |
-| Full unified | `RW_CONTEXT_LOG_FULL=1 node .claude/hooks/synapse-engine.cjs` | ~5-10KB/prompt |
+```json
+"command": "node .claude/hooks/synapse-engine.cjs"
+"command": "node .claude/hooks/code-intel-pretool.cjs"
+```
 
-> `RW_CONTEXT_LOG_FULL=1` must be set on **both** hooks (UserPromptSubmit and PreToolUse).
+And remove the `Skill` from the PreToolUse matcher if not needed.
 
 ---
 

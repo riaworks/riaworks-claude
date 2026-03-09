@@ -11,15 +11,15 @@
  * Logging: RW_HOOK_LOG=1 (summary) or RW_HOOK_LOG=2 (verbose with XML)
  * Output:  .logs/rw-hooks.log (unified)
  *
- * @module code-intel-pretool-hook
+ * @module riaworks/rw-pretool-log
  */
 
 const path = require('path');
 const fs = require('fs');
 
 // ── Local lib (zero AIOX dependency) ───────────────────
-const { readStdin } = require('./lib/read-stdin');
-const logger = require('./lib/hook-logger');
+const { readStdin } = require('./lib/rw-read-stdin');
+const logger = require('./lib/rw-hook-logger');
 
 // ── AIOX core path (resolved lazily) ───────────────────
 const AIOX_CODE_INTEL = path.join(__dirname, '..', '..', '..', '.aiox-core', 'core', 'code-intel', 'hook-runtime.js');
@@ -118,7 +118,7 @@ function run() {
       try {
         const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
         logger.init(cwd);
-        logger.logOp('ERROR', `code-intel crashed: ${err.message}`);
+        logger.logOp('ERROR', `rw-pretool-log crashed: ${err.message}`);
       } catch (_) {}
     });
 }

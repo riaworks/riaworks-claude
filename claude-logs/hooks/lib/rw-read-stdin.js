@@ -4,7 +4,7 @@
  * Shared stdin reader for Claude Code hooks.
  * Handles Windows path backslash sanitization.
  *
- * @module hooks/lib/read-stdin
+ * @module riaworks/lib/rw-read-stdin
  */
 
 /**

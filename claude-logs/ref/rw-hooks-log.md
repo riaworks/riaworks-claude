@@ -1,9 +1,9 @@
-# rwHooksLog — Hook Operational Log
+# rw-hooks-log — Hook Operational Log
 
-**Function:** `rwHooksLog(cwd, level, message)`
-**Env var:** `RW_HOOKS_LOG=1`
-**Log file:** `.logs/rw-hooks-log.log`
-**Defined in:** `.aiox-core/core/synapse/runtime/hook-runtime.js`
+**Logger function:** `logSynapse()`, `logEngineMetrics()`, `logOp()`
+**Env var:** `RW_HOOK_LOG=1` (summary) or `RW_HOOK_LOG=2` (verbose)
+**Log file:** `.logs/rw-hooks.log`
+**Defined in:** `.riaworks-claude/claude-logs/hooks/lib/rw-hook-logger.js`
 
 ---
 
@@ -11,11 +11,12 @@
 
 Lightweight operational log that records the **execution status** of Claude Code hooks. Answers the question: "is the hook working or failing?"
 
-Does not record content (prompts, XML). For that use `rwSynapseTrace` (see `rw-synapse-trace.md`).
+At level 1 (summary): logs prompt truncated, session ID, bracket, rule count, XML size, static context summary, and engine metrics.
+At level 2 (verbose): also logs the full injected XML.
 
 ## Why It Exists
 
-The original AIOS repository has no logging system for hooks. When a hook fails, Claude Code only shows "hook error" with no details. Without logs, it is impossible to diagnose:
+The original AIOX repository has no logging system for hooks. When a hook fails, Claude Code only shows "hook error" with no details. Without logs, it is impossible to diagnose:
 
 - Whether the hook is executing
 - Whether the session was created
@@ -25,71 +26,80 @@ The original AIOS repository has no logging system for hooks. When a hook fails,
 
 ## What Causes Missing SYNAPSE
 
-Any hook failure prevents rule injection. `rwHooksLog` records exactly where the flow broke:
+Any hook failure prevents rule injection. The log records exactly where the flow broke:
 
-| Log | Meaning | SYNAPSE injected? |
-|-----|---------|-------------------|
-| `No .synapse/ directory` | .synapse/ directory does not exist | No |
-| `Session created: {id}` | First execution of the session | Yes (next log confirms) |
-| `Runtime resolved` | Hook executed successfully | Yes |
-| `Hook output: N rules` | Rules generated and written to stdout | Yes |
-| `Failed to resolve runtime` | Error loading engine/session | No |
-| `Hook crashed` | Fatal hook error | No |
+| Log Entry | Meaning | SYNAPSE injected? |
+|-----------|---------|-------------------|
+| `--- SYNAPSE ---` with rules > 0 | Pipeline executed, rules injected | Yes |
+| `--- SYNAPSE ---` with rules = 0 | Pipeline ran but no rules found | No |
+| `[ERROR] rw-synapse-log crashed` | Fatal hook error | No |
+| No entry at all | Hook did not execute | No |
 
 ## How to Activate
 
-Add `RW_HOOKS_LOG=1` before the hook command in `.claude/settings.local.json`:
+Add `RW_HOOK_LOG=1` before the hook command in `.claude/settings.local.json`:
 
 ```json
 "UserPromptSubmit": [{
   "hooks": [{
     "type": "command",
-    "command": "RW_HOOKS_LOG=1 node .claude/hooks/synapse-engine.cjs"
+    "command": "RW_HOOK_LOG=1 node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
   }]
 }]
 ```
 
+For verbose (includes full XML):
+```json
+"command": "RW_HOOK_LOG=2 node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
+```
+
 ## How to Deactivate
 
-Remove `RW_HOOKS_LOG=1` from the command:
+Remove `RW_HOOK_LOG=1` from the command:
 
 ```json
-"command": "node .claude/hooks/synapse-engine.cjs"
+"command": "node .riaworks-claude/claude-logs/hooks/rw-synapse-log.cjs"
 ```
 
 ## How to View
 
 ```bash
 # Full log
-cat .logs/rw-hooks-log.log
+cat .logs/rw-hooks.log
 
 # Real time
-tail -f .logs/rw-hooks-log.log
+tail -f .logs/rw-hooks.log
 
 # Errors only
-grep ERROR .logs/rw-hooks-log.log
+grep ERROR .logs/rw-hooks.log
 
 # Last 20 lines
-tail -20 .logs/rw-hooks-log.log
+tail -20 .logs/rw-hooks.log
 ```
 
 ## Log Format
 
 ```
-[2026-03-06T16:03:28.510Z] [INFO] Session created: e38b56d8-af23-47fb-954c
-[2026-03-06T16:03:28.587Z] [INFO] Runtime resolved — session=e38b56d8, prompt_count=0, bracket=FRESH
-[2026-03-06T16:03:28.592Z] [INFO] Hook output: 59 rules, bracket=FRESH, xml=3881 bytes
+--- SYNAPSE ---------------------------------------- 16:03:28 ---
+  prompt:  teste de nomenclatura rw
+  session: e38b56d8 | bracket: FRESH | rules: 59 | xml: 3.8K
+  static:  CLAUDE.md(14.2K), rules/5(11.3K), MEMORY.md(1.2K)
+  --- engine metrics ---
+  pipeline: 45.2ms | loaded: 3 | skipped: 2 | errors: 0 | rules: 59
+  layers:   [l0-constitution:12r/5.1ms, l1-global:35r/20.3ms, l2-agent:12r/15.8ms]
+  --- end metrics ---
 ```
 
-Each prompt generates 2-3 lines. Lightweight, no performance impact.
+Each prompt generates one entry. Lightweight, minimal performance impact.
 
 ## Behavior
 
-- **Opt-in:** only writes when `RW_HOOKS_LOG=1`
+- **Opt-in:** only writes when `RW_HOOK_LOG` is set to `1` or `2`
 - **Fire-and-forget:** never blocks hook execution
 - **Auto-create:** creates `.logs/` with `.gitignore` if it does not exist
 - **Append-only:** never overwrites, always appends
+- **Unified:** all events (synapse, code-intel, skill) write to the same `.logs/rw-hooks.log`
 
 ---
 
-*RIAWORKS — 2026-03-06*
+*RIAWORKS — 2026-03-08*
