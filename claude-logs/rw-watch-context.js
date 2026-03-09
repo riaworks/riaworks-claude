@@ -48,6 +48,8 @@ const SECTION_COLORS = {
   'SYNAPSE': C.cyan,
   'CODE-INTEL': C.blue,
   'SKILL': C.magenta,
+  'AIOX-RUNTIME': C.yellow,
+  'POSTTOOL': C.green,
   'ERROR': C.red,
 };
 

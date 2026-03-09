@@ -233,6 +233,33 @@ function logCodeIntel(cwd, { toolName, filePath, xml }) {
 }
 
 /**
+ * Log Code-Intel skip (no entity data found — no injection).
+ *
+ * @param {string} cwd - Project root
+ * @param {object} params
+ * @param {string} params.toolName - Write or Edit
+ * @param {string} params.filePath - Absolute path to target file
+ */
+function logCodeIntelSkip(cwd, { toolName, filePath }) {
+  const level = getLogLevel();
+  if (level === 0) return;
+
+  const relPath = filePath
+    ? path.relative(cwd, filePath).replace(/\\/g, '/')
+    : filePath;
+
+  const lines = [
+    '',
+    `--- CODE-INTEL ------------------------------------- ${timeShort()} ---`,
+    `  tool:   ${toolName} -> ${relPath}`,
+    `  entity: (none) | no injection`,
+    '',
+  ];
+
+  append(lines.join('\n') + '\n');
+}
+
+/**
  * Log Skill/agent activation (NOT injected by hook — Skill tool does it).
  *
  * @param {string} cwd - Project root
@@ -302,6 +329,89 @@ function logEngineMetrics(metrics) {
 }
 
 /**
+ * Log AIOX-RUNTIME event — synapse pipeline internal flow.
+ * Captures bracket, layers, timing from the AIOX engine metrics file.
+ *
+ * @param {string} cwd - Project root
+ * @param {object} metrics - Metrics from .synapse/metrics/hook-metrics.json
+ */
+function logAioxRuntime(cwd, metrics) {
+  const level = getLogLevel();
+  if (level === 0 || !metrics) return;
+
+  const bracket = metrics.context_bracket || '?';
+  const promptCount = metrics.prompt_count || 0;
+
+  const lines = [
+    '',
+    `--- AIOX-RUNTIME ----------------------------------- ${timeShort()} ---`,
+    `  bracket: ${bracket} | prompt#: ${promptCount}`,
+    `  pipeline: ${(metrics.total_ms || 0).toFixed(1)}ms | loaded: ${metrics.layers_loaded || 0} | skipped: ${metrics.layers_skipped || 0} | errors: ${metrics.layers_errored || 0}`,
+  ];
+
+  // Per-layer detail
+  const perLayer = metrics.per_layer || {};
+  const layerNames = Object.keys(perLayer);
+  if (layerNames.length > 0) {
+    const parts = [];
+    for (const name of layerNames) {
+      const info = perLayer[name];
+      const st = info.status || '?';
+      if (st === 'ok') {
+        parts.push(`${name}:${info.rules || 0}r/${(info.duration || 0).toFixed(1)}ms`);
+      } else if (st === 'skipped') {
+        parts.push(`${name}:skip`);
+      } else {
+        parts.push(`${name}:ERR`);
+      }
+    }
+    lines.push(`  layers:   [${parts.join(', ')}]`);
+  }
+
+  lines.push('');
+  append(lines.join('\n') + '\n');
+}
+
+/**
+ * Log PostToolUse result — what happened after Write/Edit executed.
+ *
+ * @param {string} cwd - Project root
+ * @param {object} params
+ * @param {string} params.toolName - Write or Edit
+ * @param {string} params.filePath - Target file path
+ * @param {boolean} params.success - Whether the tool succeeded
+ * @param {number} params.resultSize - Size of tool result in bytes
+ * @param {string} [params.result] - Full result (only logged at level 2)
+ */
+function logPostTool(cwd, { toolName, filePath, success, resultSize, result }) {
+  const level = getLogLevel();
+  if (level === 0) return;
+
+  const relPath = filePath
+    ? path.relative(cwd, filePath).replace(/\\/g, '/')
+    : filePath;
+
+  const status = success ? 'OK' : 'FAIL';
+
+  const lines = [
+    '',
+    `--- POSTTOOL --------------------------------------- ${timeShort()} ---`,
+    `  tool:   ${toolName} -> ${relPath}`,
+    `  status: ${status} | result: ${fmtSize(resultSize || 0)}`,
+  ];
+
+  if (level >= 2 && result && !success) {
+    const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+    lines.push(`  --- result ---`);
+    lines.push(`  ${truncate(resultStr, 200)}`);
+    lines.push(`  --- end result ---`);
+  }
+
+  lines.push('');
+  append(lines.join('\n') + '\n');
+}
+
+/**
  * Log operational message.
  * @param {'INFO'|'WARN'|'ERROR'} level
  * @param {string} message
@@ -316,8 +426,11 @@ module.exports = {
   getLogLevel,
   logSynapse,
   logEngineMetrics,
+  logAioxRuntime,
   logCodeIntel,
+  logCodeIntelSkip,
   logSkill,
+  logPostTool,
   logOp,
   staticContextSummary,
   fmtSize,
