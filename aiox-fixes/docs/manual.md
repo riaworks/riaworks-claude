@@ -1,12 +1,13 @@
 # AIOX Hook Fix Pack — Manual
 
-Fix pack for the Synkra AIOX hook system. Contains 4 corrected files ready to apply to any AIOX project.
+Fix pack for the Synkra AIOX hook system. Fixes 8 structural bugs via on-demand prompt.
 
 ## Pack Contents
 
 ```
 aiox-fixes/
-├── hook-fix-pack/
+├── prompt-aplicar-fixes.md              # MAIN: Prompt to apply all 8 fixes via Claude Code
+├── hook-fix-pack/                       # Reference: pre-patched files (may become outdated)
 │   ├── hook-runtime.js                  # Main hook runtime (patched)
 │   ├── synapse-engine.cjs               # UserPromptSubmit hook (patched)
 │   ├── precompact-session-digest.cjs    # PreCompact hook (patched)
@@ -25,7 +26,7 @@ aiox-fixes/
 | `precompact-session-digest.cjs` | `.claude/hooks/precompact-session-digest.cjs` |
 | `hook-runtime.js` | `.aios-core/core/synapse/runtime/hook-runtime.js` |
 
-## Bugs Fixed (9 total)
+## Bugs Fixed (8 structural fixes)
 
 | # | Bug | Root Cause | Fix |
 |---|-----|-----------|-----|
@@ -34,42 +35,23 @@ aiox-fixes/
 | 3 | stdout cutoff on Windows | `process.exit(0)` kills pipe before flush | Removed `process.exit()` from all hooks |
 | 4 | Session never persisted | `createSession()` never called in flow | Called `createSession()` when `loadSession()` returns null |
 | 5 | precompact runner not found | Fixed path doesn't find the runner | Tries 2 paths: `node_modules/aios-core/` and `.aios-core/` at root |
-| 6 | No diagnostic logs | No logging in hooks | `hookLog()` writes to `.logs/hooks.log` |
-| 7 | `$CLAUDE_PROJECT_DIR` on Windows | Bash variable doesn't expand in cmd.exe | Relative path `node .claude/hooks/synapse-engine.cjs` |
-| 8 | `timeout: 10` kills hook | 10ms too low | Timeout removed from settings.json |
-| 9 | .tmp files deleted while in use | cleanOrphanTmpFiles without age check | 60s age threshold before deleting |
+| 6 | `$CLAUDE_PROJECT_DIR` on Windows | Bash variable doesn't expand in cmd.exe | Relative path `node .claude/hooks/synapse-engine.cjs` |
+| 7 | `timeout: 10` kills hook | 10ms too low | Timeout removed from settings.json |
+| 8 | .tmp files deleted while in use | cleanOrphanTmpFiles without age check | 60s age threshold before deleting |
+
+> **Logging:** For diagnostic logging (`hookLog()`), see the separate **claude-logs** package.
 
 ## How to Apply
 
-### Method 1: Manual copy
+### Method 1: Prompt via Claude Code (recommended)
 
-1. Create the logs directory:
-```bash
-mkdir -p .logs
-echo -e "*\n!.gitignore" > .logs/.gitignore
-```
-
-2. Copy each file to the correct destination (see mapping table above).
-
-3. Verify:
-```bash
-cat .logs/hooks.log 2>/dev/null || echo "Log will be created on next prompt"
-```
-
-4. Run any prompt in Claude Code and check:
-```bash
-cat .logs/hooks.log
-```
+Copy the full content of `prompt-aplicar-fixes.md` and paste it into Claude Code in the target AIOX project. Claude will apply all 8 fixes automatically, adapting to the current version of the AIOX code.
 
 ### Method 2: Manual copy from hook-fix-pack
 
-Copy each file from `hook-fix-pack/` to the correct destination (see mapping table above).
+Copy each file from `hook-fix-pack/` to the correct destination (see file mapping table above).
 
-## Logging
-
-The patched `hook-runtime.js` includes a `hookLog()` function for diagnostic logging to `.logs/hooks.log`.
-
-For a full RIAWORKS logging system (unified logger, env var control, real-time monitoring), see the separate **claude-logs** package.
+> **Note:** Pre-patched files may become outdated if AIOX updates. The prompt method (Method 1) is preferred as it adapts on-demand.
 
 ## settings.json Configuration
 

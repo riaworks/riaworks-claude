@@ -8,11 +8,11 @@ RIAWORKS utilities for Claude Code — tools, fixes, and extensions.
 
 ### [`aiox-fixes`](aiox-fixes/)
 
-Patch pack for the Synkra AIOX hook system. Fixes 9 bugs and adds diagnostic logging to the AIOX core.
+Fix pack for the Synkra AIOX hook system. Fixes 8 structural bugs via on-demand prompt.
 
-- 4 patched files ready to apply on top of latest AIOX
+- `prompt-aplicar-fixes.md` — paste into Claude Code to apply all 8 fixes automatically
+- `hook-fix-pack/` — pre-patched reference files (may become outdated)
 - Fixes: hook errors, stdout cutoff on Windows, session persistence, orphan cleanup
-- Includes prompt to apply fixes automatically via Claude Code
 
 **Docs:** [English](aiox-fixes/docs/manual.md) | [Portugues](aiox-fixes/docs/manual-pt-BR.md)
 
@@ -68,6 +68,6 @@ Utilitarios RIAWORKS para Claude Code — ferramentas, correcoes e extensoes.
 
 | Pacote | Descricao |
 |--------|-----------|
-| [`aiox-fixes`](aiox-fixes/) | Correcao de 9 bugs do AIOX + prompt de aplicacao |
+| [`aiox-fixes`](aiox-fixes/) | 8 bug fixes do AIOX via prompt sob demanda |
 | [`claude-logs`](claude-logs/) | Sistema de logging unificado para hooks do Claude Code |
 | [`read-transcript`](read-transcript/) | Leitor interativo de transcripts de sessao |
