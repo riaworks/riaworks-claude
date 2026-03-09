@@ -1,7 +1,7 @@
 # Prompt: Aplicar 8 Bug Fixes nos AIOX Hooks
 
 **Uso:** Cole o conteudo da secao PROMPT abaixo no Claude Code de qualquer projeto com AIOX instalado.
-**Pre-requisito:** AIOX (Synkra) instalado no projeto (`.aios-core/` e `.claude/hooks/` existem).
+**Pre-requisito:** AIOX (Synkra) instalado no projeto (`.aiox-core/` e `.claude/hooks/` existem).
 **Resultado:** 8 bugs corrigidos nos hooks — sem alteracao de funcionalidade, apenas correcoes.
 
 > **Sistema de Logs:** Se quiser adicionar logging apos aplicar os fixes, veja o package `claude-logs`.
@@ -52,7 +52,7 @@ Remova qualquer `timeout` dos hooks (o default do Claude Code e suficiente).
 
 ## BUG 2: hookEventName ausente no output JSON
 
-No arquivo `.aios-core/core/synapse/runtime/hook-runtime.js`, a funcao `buildHookOutput()` nao inclui `hookEventName` no JSON de saida. Claude Code rejeita o output sem esse campo.
+No arquivo `.aiox-core/core/synapse/runtime/hook-runtime.js`, a funcao `buildHookOutput()` nao inclui `hookEventName` no JSON de saida. Claude Code rejeita o output sem esse campo.
 
 **Correcao:** Na funcao `buildHookOutput()`, adicione `hookEventName: 'UserPromptSubmit'` no objeto retornado. O output deve ter este formato:
 
@@ -104,8 +104,8 @@ if (!session) {
 No `precompact-session-digest.cjs`, o path para o runner e fixo e nao funciona em todas as instalacoes.
 
 **Correcao:** O hook deve tentar 2 paths para encontrar o runner:
-1. `node_modules/aios-core/` (instalacao via npm)
-2. `.aios-core/` (instalacao local na raiz)
+1. `node_modules/aiox-core/` (instalacao via npm)
+2. `.aiox-core/` (instalacao local na raiz)
 
 Use `fs.existsSync()` para testar cada path antes de usar.
 
@@ -176,20 +176,20 @@ cat .claude/settings.json | node -e "const j=JSON.parse(require('fs').readFileSy
 | # | Bug | Arquivo Principal |
 |---|-----|-------------------|
 | 1 | precompact no evento errado | `.claude/settings.json` |
-| 2 | hookEventName ausente | `.aios-core/core/synapse/runtime/hook-runtime.js` |
+| 2 | hookEventName ausente | `.aiox-core/core/synapse/runtime/hook-runtime.js` |
 | 3 | process.exit mata pipe | `.claude/hooks/synapse-engine.cjs`, `precompact-session-digest.cjs` |
-| 4 | session nunca criada | `.aios-core/core/synapse/runtime/hook-runtime.js` |
+| 4 | session nunca criada | `.aiox-core/core/synapse/runtime/hook-runtime.js` |
 | 5 | runner path nao encontrado | `.claude/hooks/precompact-session-digest.cjs` |
 | 6 | $CLAUDE_PROJECT_DIR no Windows | `.claude/settings.json` |
 | 7 | timeout 10ms mata hook | `.claude/settings.json` |
-| 8 | .tmp deletado em uso | `.aios-core/core/synapse/runtime/hook-runtime.js` |
+| 8 | .tmp deletado em uso | `.aiox-core/core/synapse/runtime/hook-runtime.js` |
 
 ## NOTAS
 
 - Nenhum fix altera funcionalidade — apenas correcoes de bugs
 - Todos os fixes sao retrocompativeis
 - Para adicionar sistema de logs apos os fixes, veja o package `claude-logs`
-- Baseado no PR #551 (riaworks/aios-core) + CodeRabbit review
+- Baseado no PR #551 (riaworks/aiox-core) + CodeRabbit review
 ```
 
 ---

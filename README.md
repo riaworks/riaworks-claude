@@ -11,7 +11,6 @@ RIAWORKS utilities for Claude Code — tools, fixes, and extensions.
 Fix pack for the Synkra AIOX hook system. Fixes 8 structural bugs via on-demand prompt.
 
 - `prompt-aplicar-fixes.md` — paste into Claude Code to apply all 8 fixes automatically
-- `hook-fix-pack/` — pre-patched reference files (may become outdated)
 - Fixes: hook errors, stdout cutoff on Windows, session persistence, orphan cleanup
 
 **Docs:** [English](aiox-fixes/docs/manual.md) | [Portugues](aiox-fixes/docs/manual-pt-BR.md)

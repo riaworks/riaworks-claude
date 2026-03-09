@@ -24,7 +24,7 @@ Hooks customizados do projeto RIAWORKS que estendem os hooks AIOX com logging e 
 └── docs/
     ├── hooks-guide.md              ← Guia completo do sistema de hooks
     ├── ativar-log-aios.md          ← Prompt: ativar hookLog() no AIOX core
-    └── prompt-aplicar-log-system.md ← Prompt: aplicar no aios-core-fork
+    └── prompt-aplicar-log-system.md ← Prompt: aplicar no aiox-core-fork
 ```
 
 ## Como Funciona

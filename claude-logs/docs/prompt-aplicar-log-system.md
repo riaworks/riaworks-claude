@@ -1,6 +1,6 @@
 # Prompt: Aplicar Sistema de Log Persistente nos AIOS Hooks
 
-**Uso:** Cole o conteúdo da seção PROMPT abaixo no Claude Code, aberto no diretório `aios-core-fork`.
+**Uso:** Cole o conteúdo da seção PROMPT abaixo no Claude Code, aberto no diretório `aiox-core-fork`.
 **Pré-requisito:** Estar no branch `fix/hook-by-riaworks` (que já tem os 8 bug fixes aplicados).
 **Resultado:** Sistema de log persistente em `.logs/hooks.log` com fire-and-forget.
 
@@ -13,7 +13,7 @@
 ```
 Preciso que você adicione o sistema de log persistente (`hookLog`) aos hooks do AIOS. O branch `fix/hook-by-riaworks` já tem os 8 bug fixes aplicados, mas FALTA o sistema de logs em arquivo. Execute tudo sem perguntar.
 
-O diretório de trabalho é o aios-core-fork.
+O diretório de trabalho é o aiox-core-fork.
 
 ## CONTEXTO
 
@@ -33,7 +33,7 @@ Crie o arquivo `.logs/.gitignore` com conteúdo:
 
 ## PASSO 2: Adicionar função hookLog() no hook-runtime.js
 
-No arquivo `.aios-core/core/synapse/runtime/hook-runtime.js`, adicione esta função LOGO APÓS a linha `const DEFAULT_STALE_TTL_HOURS = 168;` e ANTES da função `cleanOrphanTmpFiles`:
+No arquivo `.aiox-core/core/synapse/runtime/hook-runtime.js`, adicione esta função LOGO APÓS a linha `const DEFAULT_STALE_TTL_HOURS = 168;` e ANTES da função `cleanOrphanTmpFiles`:
 
 ```javascript
 /**
@@ -129,7 +129,7 @@ No arquivo `.claude/hooks/synapse-engine.cjs`:
 1. **Atualizar o require** para importar `hookLog`:
 ```javascript
 const { resolveHookRuntime, buildHookOutput, hookLog } = require(
-  path.join(__dirname, '..', '..', '.aios-core', 'core', 'synapse', 'runtime', 'hook-runtime.js'),
+  path.join(__dirname, '..', '..', '.aiox-core', 'core', 'synapse', 'runtime', 'hook-runtime.js'),
 );
 ```
 
@@ -168,7 +168,7 @@ Esperado: linhas com timestamps mostrando session created, runtime resolved, hoo
 | Arquivo | Alteração |
 |---------|-----------|
 | `.logs/.gitignore` | Criar com `*` e `!.gitignore` |
-| `.aios-core/core/synapse/runtime/hook-runtime.js` | Adicionar `hookLog()`, substituir `console.error`/`DEBUG` por `hookLog`, exportar no `module.exports` |
+| `.aiox-core/core/synapse/runtime/hook-runtime.js` | Adicionar `hookLog()`, substituir `console.error`/`DEBUG` por `hookLog`, exportar no `module.exports` |
 | `.claude/hooks/synapse-engine.cjs` | Importar `hookLog`, adicionar log de output e log de crash |
 
 ## NOTAS
@@ -182,4 +182,4 @@ Esperado: linhas com timestamps mostrando session created, runtime resolved, hoo
 
 ---
 
-*Gerado em 2026-03-04 — baseado nos documentos de aios-bug/ e aios-utils/*
+*Gerado em 2026-03-04 — baseado nos documentos de aiox-bug/ e aiox-utils/*

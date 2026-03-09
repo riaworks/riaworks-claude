@@ -6,25 +6,11 @@ Pack de correcoes para o sistema de hooks do Synkra AIOX. Corrige 8 bugs estrutu
 
 ```
 aiox-fixes/
-├── prompt-aplicar-fixes.md              # PRINCIPAL: Prompt para aplicar os 8 fixes via Claude Code
-├── hook-fix-pack/                       # Referencia: arquivos pre-patcheados (podem ficar desatualizados)
-│   ├── hook-runtime.js                  # Runtime principal dos hooks (patcheado)
-│   ├── synapse-engine.cjs               # Hook de UserPromptSubmit (patcheado)
-│   ├── precompact-session-digest.cjs    # Hook de PreCompact (patcheado)
-│   └── settings.json                    # Configuracao de hooks do Claude (corrigido)
+├── prompt-aplicar-fixes.md              # Prompt para aplicar os 8 fixes via Claude Code
 └── docs/
     ├── manual.md                        # Versao em ingles
     └── manual-pt-BR.md                  # Este arquivo
 ```
-
-## Mapeamento de Arquivos
-
-| Arquivo no pack | Destino no projeto AIOS |
-|---|---|
-| `settings.json` | `.claude/settings.json` |
-| `synapse-engine.cjs` | `.claude/hooks/synapse-engine.cjs` |
-| `precompact-session-digest.cjs` | `.claude/hooks/precompact-session-digest.cjs` |
-| `hook-runtime.js` | `.aios-core/core/synapse/runtime/hook-runtime.js` |
 
 ## Bugs Corrigidos (8 fixes estruturais)
 
@@ -34,7 +20,7 @@ aiox-fixes/
 | 2 | Hook output rejeitado pelo Claude Code | `hookEventName` ausente no JSON output | Adicionado `hookEventName: 'UserPromptSubmit'` em `buildHookOutput()` |
 | 3 | stdout cortado no Windows | `process.exit(0)` mata pipe antes do flush | Removido `process.exit()` em todos os hooks |
 | 4 | Session nunca persistida | `createSession()` nunca chamada no fluxo | Chamada `createSession()` quando `loadSession()` retorna null |
-| 5 | precompact runner not found | Path fixo nao encontra o runner | Tenta 2 paths: `node_modules/aios-core/` e `.aios-core/` na raiz |
+| 5 | precompact runner not found | Path fixo nao encontra o runner | Tenta 2 paths: `node_modules/aiox-core/` e `.aiox-core/` na raiz |
 | 6 | `$CLAUDE_PROJECT_DIR` no Windows | Variavel bash nao expande em cmd.exe | Path relativo `node .claude/hooks/synapse-engine.cjs` |
 | 7 | `timeout: 10` mata hook | 10ms muito baixo | Timeout removido do settings.json |
 | 8 | .tmp files deletados em uso | cleanOrphanTmpFiles sem age check | Age threshold de 60s antes de deletar |
@@ -43,15 +29,7 @@ aiox-fixes/
 
 ## Como Aplicar
 
-### Metodo 1: Prompt via Claude Code (recomendado)
-
 Copie o conteudo completo de `prompt-aplicar-fixes.md` e cole no Claude Code do projeto AIOX alvo. O Claude aplicara todos os 8 fixes automaticamente, adaptando ao codigo atual do AIOX.
-
-### Metodo 2: Copia manual do hook-fix-pack
-
-Copie cada arquivo de `hook-fix-pack/` para o destino correto (ver tabela de mapeamento acima).
-
-> **Nota:** Arquivos pre-patcheados podem ficar desatualizados se o AIOX atualizar. O metodo via prompt (Metodo 1) e preferivel pois se adapta sob demanda.
 
 ## Configuracao do settings.json
 
@@ -81,7 +59,7 @@ Pontos importantes:
 
 ## Origem
 
-Baseado no PR #551 (riaworks/aios-core) + review CodeRabbit + documentacao em aios-bug/.
+Baseado no PR #551 (riaworks/aiox-core) + review CodeRabbit + documentacao em aiox-bug/.
 
 ## Packages Relacionados
 

@@ -1,7 +1,7 @@
 # Ativar Sistema de Log do AIOS Hooks
 
 **Uso:** Cole este prompt no Claude Code de qualquer projeto com AIOS instalado.
-**Pré-requisito:** Os hooks já devem estar corrigidos (ver `aios-bug/fix-aios-hooks-complete.md`).
+**Pré-requisito:** Os hooks já devem estar corrigidos (ver `aiox-bug/fix-aios-hooks-complete.md`).
 **Resultado:** Logs de cada execução de hook em `.logs/hooks.log`.
 
 ---
@@ -25,7 +25,7 @@ Crie o arquivo `.logs/.gitignore`:
 
 ## PASSO 2: Adicionar hookLog() no hook-runtime.js
 
-No arquivo `.aios-core/core/synapse/runtime/hook-runtime.js`, adicione esta função LOGO APÓS as primeiras linhas de require (`const fs = require('fs');`), ANTES de qualquer outra função:
+No arquivo `.aiox-core/core/synapse/runtime/hook-runtime.js`, adicione esta função LOGO APÓS as primeiras linhas de require (`const fs = require('fs');`), ANTES de qualquer outra função:
 
 ```javascript
 /**
@@ -111,7 +111,7 @@ No arquivo `.claude/hooks/synapse-engine.cjs`:
 1. Importe `hookLog` junto com os outros imports:
 ```javascript
 const { resolveHookRuntime, buildHookOutput, hookLog } = require(
-  path.join(__dirname, '..', '..', '.aios-core', 'core', 'synapse', 'runtime', 'hook-runtime.js'),
+  path.join(__dirname, '..', '..', '.aiox-core', 'core', 'synapse', 'runtime', 'hook-runtime.js'),
 );
 ```
 
